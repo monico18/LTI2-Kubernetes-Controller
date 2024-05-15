@@ -3,6 +3,7 @@ import time
 import swagger_client
 from swagger_client.rest import ApiException
 from pprint import pprint
+import json
 
 # Configure API key authorization: BearerToken
 configuration = swagger_client.Configuration()
@@ -13,14 +14,29 @@ configuration.api_key_prefix['authorization'] = 'Bearer'
 api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
 
 try:
-    #list nodes
-    api_response = api_instance.list_core_v1_node()
-    pprint(api_response)
-    #list namespaces
-    api_response = api_instance.list_core_v1_namespace()
-    pprint(api_response)
-    #list pods
-    api_response = api_instance.list_core_v1_namespace()
-    pprint(api_response)
+    # List Nodes
+    api_response = api_instance.list_core_v1_node().to_dict()
+    with open('nodes.json', 'w') as f:
+        json.dump(api_response, f, indent=4)
+
+    # List Namespaces
+    api_response = api_instance.list_core_v1_namespace().to_dict()
+    with open('namespaces.json', 'w') as f:
+        json.dump(api_response, f, indent=4)
+
+    # List Pods
+    api_response = api_instance.list_core_v1_pod_for_all_namespaces().to_dict()
+    with open('pods.json', 'w') as f:
+        json.dump(api_response, f, indent=4)
+
+    # List Replication Controllers (Deployments)
+    api_response = api_instance.list_core_v1_replication_controller_for_all_namespaces().to_dict()
+    with open('replication_controllers.json', 'w') as f:
+        json.dump(api_response, f, indent=4)
+
+    # List Service Accounts
+    api_response = api_instance.list_core_v1_service_account_for_all_namespaces().to_dict()
+    with open('service_accounts.json', 'w') as f:
+        json.dump(api_response, f, indent=4)
 except ApiException as e:
     print("Exception when calling WellKnownApi->get_service_account_issuer_open_id_configuration: %s\n" % e)

@@ -13,12 +13,30 @@ def configure_api(api_key,ip_add):
     configuration.api_key_prefix['authorization'] = 'Bearer'
 
     api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
+    
     return api_instance
 
 def list_nodes(api_instance):
     try:
         api_response = api_instance.list_core_v1_node().to_dict()
-        return json.dumps(api_response)
+
+        filtered_response = {
+            "nodes": [
+                {
+                    "name": node["metadata"]["name"],
+                    "addresses": node["status"]["addresses"],
+                    "allocatable": node["status"]["allocatable"],
+                    "conditions": node["status"]["conditions"],
+                    "images": node["status"]["images"],
+                    "node_info": node["status"]["node_info"]
+                }
+                for node in api_response.get("items", [])
+            ]
+        }
+
+        print(json.dumps(filtered_response, indent=4))
+
+        return json.dumps(api_response, indent=4)
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_node: %s\n" % e)
 

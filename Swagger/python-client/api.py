@@ -13,10 +13,9 @@ def configure_api(api_key,ip_add):
     configuration.api_key_prefix['authorization'] = 'Bearer'
 
     api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
-    api_instance.list_networking_v1_ingress_for_all_namespaces_with_http_info
-    
-    api_instance.list_networking_v1_ingress_for_all_namespaces_with_http_info
-        
+           
+    api_instance.list_core_v1_namespaced_pod
+           
     return api_instance
 
 def list_nodes(api_instance):
@@ -27,19 +26,14 @@ def list_nodes(api_instance):
             "nodes": [
                 {
                     "name": node["metadata"]["name"],
-                    "addresses": node["status"]["addresses"],
-                    "allocatable": node["status"]["allocatable"],
-                    "conditions": node["status"]["conditions"],
-                    "images": node["status"]["images"],
-                    "node_info": node["status"]["node_info"]
+                    "pod_CIDR": node["spec"]["pod_cidr"],
+                    "node_info": node["status"]["node_info"]["os_image"]
                 }
                 for node in api_response.get("items", [])
             ]
         }
 
-        print(json.dumps(filtered_response, indent=4))
-
-        return json.dumps(api_response, indent=4)
+        return json.dumps(filtered_response, indent=4)
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_node: %s\n" % e)
 
@@ -47,8 +41,20 @@ def list_namespaces(api_instance):
     try:
         api_response = api_instance.list_core_v1_namespace().to_dict()
         
-        print(json.dumps(api_response, indent=4))
+        excluded_namespaces = {"kube-system", "kube-public", "kube-node-lease", "kubernetes-dashboard"}
 
+        filtered_response = {
+            "namespaces": [
+                {
+                    "name": namespace["metadata"]["name"],
+                    "status": namespace["status"]["phase"],
+                }
+                for namespace in api_response.get("items", [])
+                if namespace["metadata"]["name"] not in excluded_namespaces
+            ]
+        }
+
+        return json.dumps(filtered_response, indent=4)
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_namespace: %s\n" % e)
 
@@ -82,16 +88,52 @@ def delete_namespace(api_instance,name):
 def list_pods(api_instance):
     try:
         api_response = api_instance.list_core_v1_pod_for_all_namespaces().to_dict()
-        print(json.dumps(api_response, indent=4))
+        
+        excluded_namespaces = {"svclb-traefik-298db33a-gf4v8", "local-path-provisioner-6c86858495-cf6vs",
+                               "coredns-6799fbcd5-bq7qm", "traefik-7d5f6474df-l69l8", 
+                               "svclb-traefik-298db33a-skzkj", "dashboard-metrics-scraper-5657497c4c-7hp6p",
+                               "svclb-traefik-298db33a-ngjxt", "metrics-server-54fd9b65b-55hj7",
+                               "kubernetes-dashboard-78f87ddfc-v825n"}
 
+        filtered_response = {
+            "pods": [
+                {
+                    "name": pod["metadata"]["name"],
+                    "namespace": pod['metadata']["namespace"],
+                    "num_containers": str(len(pod["spec"]["containers"])),
+                    "status": pod["status"]["phase"],
+                    "pod_ip": pod["status"]["pod_ip"],
+                }
+                for pod in api_response.get("items", [])
+                if pod["metadata"]["name"] not in excluded_namespaces
+            ]
+        }
+
+        return json.dumps(filtered_response, indent=4)
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_pod_for_all_namespaces: %s\n" % e)
 
-def create_pod(api_instance,namespace, json_content):
+def list_selected_pod(api_instance, name,namespace):
     try:
-        api_response = api_instance.create_core_v1_namespaced_pod(namespace,json_content).to_dict()
-        print(json.dumps(api_response, indent=4))
+        api_response = api_instance.read_core_v1_namespaced_pod(name=name,namespace=namespace).to_dict()
 
+        filtered_response = {
+                    "name": api_response["metadata"]["name"],
+                    "namespace": api_response['metadata']["namespace"],
+                    "num_containers": str(len(api_response["spec"]["containers"])),
+                    "status": api_response["status"]["phase"],
+                    "pod_ip": api_response["status"]["pod_ip"],
+                }
+        
+        return json.dumps(filtered_response, indent=4)
+    except ApiException as e:
+        print("Exception when calling CoreV1Api->list_core_v1_pod_for_all_namespaces: %s\n" % e)
+        
+    
+def create_pod(api_instance,namespace, json_content):
+    try:        
+        api_instance.create_core_v1_namespaced_pod(namespace=namespace,body=json_content).to_dict()
+        
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_pod_for_all_namespaces: %s\n" % e)
         

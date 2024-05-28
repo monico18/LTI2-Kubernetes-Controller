@@ -118,9 +118,7 @@ def list_selected_pod(api_instance, name,namespace):
         filtered_response = {
                     "name": api_response["metadata"]["name"],
                     "namespace": api_response['metadata']["namespace"],
-                    "num_containers": str(len(api_response["spec"]["containers"])),
-                    "status": api_response["status"]["phase"],
-                    "pod_ip": api_response["status"]["pod_ip"],
+                    "containers": api_response["spec"]["containers"],
                 }
         
         return json.dumps(filtered_response, indent=4)

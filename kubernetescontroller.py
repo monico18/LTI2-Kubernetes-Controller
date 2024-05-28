@@ -4,6 +4,7 @@ from PyQt5.QtGui import QDesktopServices
 from ui_main import Ui_MainWindow
 from login import Ui_LoginPage
 from pod_config import Ui_PodConfig
+from container_info import Ui_ContainerInfo
 import sys
 import json
 import os
@@ -53,15 +54,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         
         #Pages
         self.pod_config_page = None
+        self.container_info_page = None
         
         #Pods
         self.podsTable.clicked.connect(self.handle_podtable_item_clicked)
         self.btn_refresh_pod_table.clicked.connect(self.refresh_table_pods)
         self.btn_add_pod.clicked.connect(self.open_pod_config_page)
         self.btn_delete_pod.clicked.connect(self.open_pod_config_page)
+        self.btn_pod_container_details.clicked.connect(self.open_pod_config_page)
         
         self.btn_update_pod.setEnabled(False)
         self.btn_delete_pod.setEnabled(False)
+        self.btn_pod_container_details.setEnabled(False)
 
         
         self.refresh_table_node()
@@ -80,19 +84,23 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.btn_update_pod.setEnabled(False)
             self.btn_delete_pod.setEnabled(False)
         # if sender == self.btn_update_dhcp: 
-            # if self.selected_node is None:
-                # QtWidgets.QMessageBox.critical(self, "Error", "No node selected.")
-                # return
-            # if self.selected_dhcp is not None:
-            #     if not self.dhcp_config_page:
-            #         self.dhcp_config_page = DhcpPage(self.ip_address, self.username, self.password)
-            #         self.dhcp_config_page.configSaved.connect(self.handleConfigSaved)
-            #     self.dhcp_config_page.populate_dhcp_data(self.selected_dhcp)
-            #     self.dhcp_config_page.show()
+        #     if self.selected_node is None:
+        #         QtWidgets.QMessageBox.critical(self, "Error", "No node selected.")
+        #         return
+        #     if self.selected_dhcp is not None:
+        #         if not self.dhcp_config_page:
+        #             self.dhcp_config_page = DhcpPage(self.ip_address, self.username, self.password)
+        #             self.dhcp_config_page.configSaved.connect(self.handleConfigSaved)
+        #         self.dhcp_config_page.populate_dhcp_data(self.selected_dhcp)
+        #         self.dhcp_config_page.show()
         if sender == self.btn_add_pod:
             self.pod_config_page = PodPage(self.api_instance)
             self.pod_config_page.configSaved.connect(self.handleConfigSaved)
             self.pod_config_page.show()
+        if sender == self.btn_pod_container_details:
+            self.container_info_page = ContainerInfo()
+            self.container_info_page.fill_container_info(self.selected_pod)
+            self.container_info_page.show()
     
     def handleConfigSaved(self):
         if self.pod_config_page:
@@ -221,13 +229,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def handle_podtable_item_clicked(self, item):
         self.btn_update_pod.setEnabled(True)
         self.btn_delete_pod.setEnabled(True)
+        self.btn_pod_container_details.setEnabled(True)
         row = item.row()
         name = self.podsTable.item(row,0).text()
         namespace = self.podsTable.item(row,1).text()
         self.selected_pod = api.list_selected_pod(self.api_instance,name,namespace)
         self.selected_pod = json.loads(self.selected_pod)
 
-            
+class ContainerInfo(QtWidgets.QMainWindow, Ui_ContainerInfo):
+    def __init__(self):
+        super(ContainerInfo,self).__init__()
+        self.setupUi(self)
+        self.btn_exit.clicked.connect(self.close)
+        
+    def fill_container_info(self, selected_pod):
+        container_text = ""
+        containers = selected_pod.get('containers', [])
+        for container in containers:
+            container_text += "Name: {}\n".format(container.get('name', ''))
+            container_text += "Image: {}\n".format(container.get('image', ''))
+            container_text += "Ports:\n"
+            ports = container.get('ports', [])
+            for port in ports:
+                container_text += "  Container Port: {}\n".format(port.get('container_port', ''))
+            container_text += "\n"
+            container_text += "\n"  
+        self.container_info.setPlainText(container_text)
+
 class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
     configSaved = pyqtSignal()
     def __init__(self,api_instance):
@@ -364,7 +392,6 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
 
         self.configSaved.emit()
         self.close()
-    
         
 class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
     def __init__(self):

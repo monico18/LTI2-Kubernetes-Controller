@@ -67,6 +67,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.refresh_table_node()
         self.refresh_table_namespaces()
         self.refresh_table_pods()
+        self.refresh_table_deployments()
     
     def open_pod_config_page(self):
         sender = self.sender()  
@@ -76,6 +77,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             api.delete_pod(self.api_instance, self.selected_pod["name"], self.selected_pod["namespace"])
             time.sleep(3)
             self.refresh_table_pods()
+            self.btn_update_pod.setEnabled(False)
+            self.btn_delete_pod.setEnabled(False)
         # if sender == self.btn_update_dhcp: 
             # if self.selected_node is None:
                 # QtWidgets.QMessageBox.critical(self, "Error", "No node selected.")
@@ -185,6 +188,35 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     self.podsTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
         except Exception as e:
             print(f"Error populating Nodes: {e}")
+   
+    def refresh_table_deployments(self):
+        try:
+            response= api.list_deployments(self.ip_address, self.api_key)
+            deploys_data = json.loads(response)
+            self.deploymentTable.setRowCount(0) 
+            for row ,deploy in enumerate(deploys_data["deploys"]):
+                
+                name=deploy.get('name', '')
+                namespace = deploy.get('namespace', '')           
+                num_replicas = deploy.get('num_replicas', '')  
+
+                self.deploymentTable.insertRow(row)
+
+                self.deploymentTable.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
+                self.deploymentTable.setItem(row, 1, QtWidgets.QTableWidgetItem(namespace))
+                self.deploymentTable.setItem(row, 2, QtWidgets.QTableWidgetItem(num_replicas))
+
+
+                for col in range(3):
+                    item = self.deploymentTable.item(row, col)
+                    if item:
+                        item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+
+
+                for col in range(3):
+                    self.deploymentTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+        except Exception as e:
+            print(f"Error populating Deployments: {e}")
             
     def handle_podtable_item_clicked(self, item):
         self.btn_update_pod.setEnabled(True)
@@ -218,50 +250,121 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
         
         self.btn_apply.clicked.connect(self.save_configuration)
         self.btn_cancel.clicked.connect(self.close)
+        self.btn_add_cont.clicked.connect(self.add_container_to_table)
+        self.btn_remove_cont.clicked.connect(self.remove_selected_container)
+        
+        for col in range(2):
+                    self.containersTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
     
-    def save_configuration(self):
-        name = self.line_name.text()
-        namespace = self.namespaces.currentText()
+    def refresh_container_table(self):
+        try:
+            self.containersTable.setRowCount(0)
+            for row, deploy in enumerate(deploys_data["deploys"]):
+                name = deploy.get('name', '')
+                container_port = deploy.get('container_port', '')
+
+                self.containersTable.insertRow(row)
+
+                self.containersTable.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
+                self.containersTable.setItem(row, 1, QtWidgets.QTableWidgetItem(container_port))
+
+                for col in range(2):
+                    item = self.containersTable.item(row, col)
+                    if item:
+                        item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+
+                for col in range(2):
+                    self.containersTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+        except Exception as e:
+            print(f"Error populating Deployments: {e}")
+
+    def add_container_to_table(self):
         image = self.container_images.currentText()
         container_port = self.line_container_port.text()
-    
-        if (int(container_port) <0 and int(container_port)>65535):
+
+        if not container_port.isdigit() or not (0 <= int(container_port) <= 65535):
             msg_box = QtWidgets.QMessageBox()
             msg_box.setIcon(QtWidgets.QMessageBox.Critical)
             msg_box.setWindowTitle("Error")
             msg_box.setText("Please insert a valid port")
             msg_box.exec_()
             return
+
+        row_count = self.containersTable.rowCount()
+        self.containersTable.insertRow(row_count)
+        self.containersTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(image))
+        self.containersTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(container_port))
+
+    def remove_selected_container(self):
+        selected_items = self.containersTable.selectedItems()
+        if not selected_items:
+            return
+
+        for item in selected_items:
+            self.containersTable.removeRow(item.row())
+    
+    def save_configuration(self):
+        name = self.line_name.text().lower()
+        namespace = self.namespaces.currentText()
+        containers = []
+        row_count = self.containersTable.rowCount()
+    
+        for row in range(row_count):
+            image_item = self.containersTable.item(row, 0)
+            port_item = self.containersTable.item(row, 1)
+            
+            if image_item is None or port_item is None:
+                continue
+            
+            image = image_item.text()
+            container_port = port_item.text()
+            
+            if not container_port.isdigit() or not (0 <= int(container_port) <= 65535):
+                msg_box = QtWidgets.QMessageBox()
+                msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+                msg_box.setWindowTitle("Error")
+                msg_box.setText(f"Please insert a valid port for row {row + 1}")
+                msg_box.exec_()
+                return
+            
+            containers.append({
+                "name": image,
+                "image": f"{image}:latest",
+                "ports": [
+                    {
+                        "containerPort": int(container_port)
+                    }
+                ]
+            })
+    
+        if not containers:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Please add at least one container")
+            msg_box.exec_()
+            return
                 
         params = {
-                "apiVersion": "v1",
-                "kind": "Pod",
-                "metadata": {
-                    "name": name,
-                    "namespace": namespace,
-                    "labels": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": {
                     "app": name
-                    }
-                },
-                "spec": {
-                    "containers": [
-                    {
-                        "name": image,
-                        "image": image+":latest",
-                        "ports": [
-                        {
-                            "containerPort": int(container_port)
-                        }
-                        ]
-                    }
-                    ]
                 }
-                }
+            },
+            "spec": {
+                "containers": containers
+            }
+        }
 
         api.create_pod(self.api_instance, namespace,params)
 
         self.configSaved.emit()
         self.close()
+    
         
 class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
     def __init__(self):

@@ -13,7 +13,7 @@ def configure_api(api_key,ip_add):
     configuration.api_key_prefix['authorization'] = 'Bearer'
 
     api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
-               
+                                                            
     return api_instance
 
 def list_nodes(api_instance):
@@ -58,8 +58,6 @@ def list_namespaces(api_instance):
 
 def create_namespace(api_instance,json_content):
     try:
-        #SE DER ERRO NO json_content, ver se o erro não é no create_core, pois lá nunca é "chamado" o body
-        #Em principio não é preciso que isto funciona como IS
         api_response = api_instance.create_core_v1_namespace(json_content).to_dict()
         
         print(json.dumps(api_response, indent=4))
@@ -253,16 +251,47 @@ def delete_deployment(ip_add, api_key, name, namespace):
 
 def list_service(api_instance):
     try:
-        api_instance.list_core_v1_service_account_for_all_namespaces().to_dict()
+        api_response = api_instance.list_core_v1_service_for_all_namespaces().to_dict()
 
+        excluded_names = {"kubernetes","kube-dns","metrics-server","dashboard-metrics-scraper","kubernetes-dashboard","traefik"}
+        
+        filtered_response = {
+            "services": [
+                {
+                    "name": service["metadata"]["name"],
+                    "namespace": service['metadata']["namespace"],
+                    "label": service["metadata"]["labels"]["app"],
+                    "num_ports": str(len(service["spec"]["ports"])),
+                }
+                for service in api_response.get("items", [])
+                if service["metadata"]["name"] not in excluded_names
+            ]
+        }
+                
+        return json.dumps(filtered_response, indent=4)
+    except ApiException as e:
+        print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
+ 
+def list_selected_service(api_instance, name, namespace):
+    try:
+        
+        api_response = api_instance.read_core_v1_namespaced_service(name, namespace).to_dict()
+        
+        filtered_response = {
+                    "name": api_response["metadata"]["name"],
+                    "namespace": api_response['metadata']["namespace"],
+                    "label": api_response["metadata"]["labels"]["app"],
+                    "num_ports": str(len(api_response["spec"]["ports"])),
+                }
+
+        return json.dumps(filtered_response, indent=4)        
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
         
 def create_service(api_instance, namespace, json_content):
     try:
-        api_response = api_instance.create_core_v1_namespaced_service(namespace, json_content).to_dict()
-        print(json.dumps(api_response, indent=4))
-
+        api_instance.create_core_v1_namespaced_service(namespace, json_content).to_dict()
+        
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
 
@@ -274,9 +303,9 @@ def patch_service(api_instance, name, namespace, json_content):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
         
-def delete_service(api_instance, name, namespace, json_content):
+def delete_service(api_instance, name, namespace):
     try:
-        api_response = api_instance.delete_core_v1_namespaced_service(name, namespace, json_content).to_dict()
+        api_response = api_instance.delete_core_v1_namespaced_service(name, namespace).to_dict()
         print(json.dumps(api_response, indent=4))
 
     except ApiException as e:

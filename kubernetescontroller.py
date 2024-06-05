@@ -44,6 +44,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #Selecteds
         self.selected_pod = None
         self.selected_deployment = None
+        self.selected_service = None
 
         #Connect Pages
         self.btn_page_1.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_1))
@@ -59,6 +60,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pod_config_page = None
         self.container_info_page = None
         self.deployment_config_page = None
+        self.service_config_page = None
         
         #Pods
         self.podsTable.clicked.connect(self.handle_podtable_item_clicked)
@@ -80,11 +82,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_update_deployment.setEnabled(False)
         self.btn_delete_deployment.setEnabled(False)
 
+        #Services
+        self.servicesTable.clicked.connect(self.handle_servicetable_item_clicked)
+        self.btn_refresh_services_table.clicked.connect(self.refresh_table_service)
+        self.btn_add_service.clicked.connect(self.open_service_config_page)
+        self.btn_delete_service.clicked.connect(self.open_service_config_page)
+        
+        self.btn_update_service.setEnabled(False)
+        self.btn_delete_service.setEnabled(False)
         
         self.refresh_table_node()
         self.refresh_table_namespaces()
         self.refresh_table_pods()
         self.refresh_table_deployments()
+        self.refresh_table_service()
+    
+    def open_service_config_page(self):
+        sender = self.sender()  
+        if sender == self.btn_delete_service:
+            api.delete_service(self.api_instance, self.selected_service["name"], self.selected_service["namespace"] )
+            time.sleep(3)
+            self.refresh_table_service()
+            self.btn_update_service.setEnabled(False)
+            self.btn_delete_service.setEnabled(False)
+        if sender == self.btn_add_service:
+            self.service_config_page = ServicePage(self.api_instance, self.ip_address, self.api_key)
+            self.service_config_page.configSaved.connect(self.handleConfigSaved)
+            self.service_config_page.show()
     
     def open_deployment_config_page(self):
         sender = self.sender()  
@@ -133,6 +157,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if self.pod_config_page:
             self.pod_config_page.hide()
             self.refresh_table_pods()
+        if self.deployment_config_page:
+            self.deployment_config_page.hide()
+            self.refresh_table_deployments()
+        if self.service_config_page:
+            self.service_config_page.hide()
+            self.refresh_table_service()
 
     def refresh_table_node(self):
         try:
@@ -257,6 +287,38 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         except Exception as e:
             print(f"Error populating Deployments: {e}")
             
+    def refresh_table_service(self):
+        try:
+            response = api.list_service(self.api_instance)
+            services_data = json.loads(response)
+            self.servicesTable.setRowCount(0) 
+            for row ,service in enumerate(services_data["services"]):
+                
+                name=service.get('name', '')
+                namespace = service.get('namespace', '')
+                label = service.get('label', '')           
+                num_ports = service.get('num_ports', '') 
+
+                self.servicesTable.insertRow(row)
+
+                self.servicesTable.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
+                self.servicesTable.setItem(row, 1, QtWidgets.QTableWidgetItem(namespace))
+                self.servicesTable.setItem(row, 2, QtWidgets.QTableWidgetItem(label))
+                self.servicesTable.setItem(row, 3, QtWidgets.QTableWidgetItem(str(num_ports)))
+
+
+                for col in range(4):
+                    item = self.servicesTable.item(row, col)
+                    if item:
+                        item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+
+
+                for col in range(4):
+                    self.servicesTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+                    
+        except Exception as e:
+            print(f"Error populating Services: {e}")
+                
     def handle_podtable_item_clicked(self, item):
         self.btn_update_pod.setEnabled(True)
         self.btn_delete_pod.setEnabled(True)
@@ -276,6 +338,149 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.selected_deployment = api.list_selected_deployment(self.ip_address, self.api_key, name, namespace)
         self.selected_deployment = json.loads(self.selected_deployment)
         
+    def handle_servicetable_item_clicked(self, item):
+        self.btn_update_service.setEnabled(True)
+        self.btn_delete_service.setEnabled(True)
+        row = item.row()
+        name = self.servicesTable.item(row,0).text()
+        namespace = self.servicesTable.item(row,1).text()
+        self.selected_service = api.list_selected_service(self.api_instance, name, namespace)
+        self.selected_service = json.loads(self.selected_service)
+        
+class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
+    configSaved = pyqtSignal()
+    def __init__(self, api_instance, ip_address, api_key):
+        super(ServicePage, self).__init__()
+        self.setupUi(self)
+        self.api_instance = api_instance
+        self.ip_address = ip_address
+        self.api_key = api_key
+        
+        self.ports = []
+
+        response = api.list_namespaces(self.api_instance)
+        namespace_data = json.loads(response)
+        namespace_options = []
+        for namespaces in namespace_data["namespaces"]:
+            name = namespaces.get('name', '')
+            namespace_options.append(name)
+            
+        response_labels = api.list_pods(self.api_instance)
+        labels_data = json.loads(response_labels)
+        labels_options = set()
+        for labels in labels_data['pods']:
+            label = labels.get('label', '')
+            labels_options.add(label)
+            
+        protocol_options = ["TCP","UDP"]
+
+        self.namespaces.addItems(namespace_options)
+        self.pod_labels.addItems(sorted(labels_options))
+        self.protocol.addItems(protocol_options)
+        
+        self.btn_apply_service.clicked.connect(self.save_configuration)
+        self.btn_cancel_service.clicked.connect(self.close)
+        self.btn_add_port.clicked.connect(self.add_port_to_table)
+        self.btn_remove_port.clicked.connect(self.remove_selected_port)
+
+        for col in range(4):
+            self.portsTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+            
+    def add_port_to_table(self):
+        port_name = self.line_port_name.text()
+        port = self.line_port.text()
+        protocol = self.protocol.currentText()
+        target_port = self.line_target_port.text()
+        
+        if not port_name or not port or not target_port:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Please fill in all port fields..")
+            msg_box.exec_()
+            return
+        
+        if not port.isdigit() or not target_port.isdigit():
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Port and Target Port must be numbers.")
+            msg_box.exec_()
+            return
+        
+        row_count = self.portsTable.rowCount()
+        self.portsTable.insertRow(row_count)
+        self.portsTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(port_name))
+        self.portsTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(protocol)) 
+        self.portsTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(port))
+        self.portsTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(target_port))
+        
+        self.ports.append({
+            "name": port_name,
+            "port": int(port),
+            "protocol": protocol,
+            "targetPort": int(target_port)
+        })
+        
+        self.line_port_name.clear()
+        self.line_port.clear()
+        self.line_target_port.clear()
+            
+    def remove_selected_port(self):
+        selected_items = self.portsTable.selectedItems()
+        if not selected_items:
+            return
+
+        for item in selected_items:
+            removed_row = item.row()
+            port_name = self.portsTable.item(removed_row, 0).text()
+            self.ports = [p for p in self.ports if p["name"] != port_name]
+            self.portsTable.removeRow(removed_row)
+
+    def save_configuration(self):
+        name = self.line_name.text().lower()
+        label = self.line_label.text().lower()
+        namespace = self.namespaces.currentText()
+        pod_label = self.pod_labels.currentText()
+
+        if not name or not label:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Please fill in all required fields.")
+            msg_box.exec_()
+            return
+
+        if not self.ports:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Please add at least one port.")
+            msg_box.exec_()
+            return
+
+        params = {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": {
+                    "app": label
+                }
+            },
+            "spec": {
+                "selector": {
+                    "app": pod_label
+                },
+                "ports": self.ports
+            }
+        }
+
+        api.create_service(self.api_instance, namespace, params)
+
+        self.configSaved.emit()
+        self.close()
 
 class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
     configSaved = pyqtSignal()

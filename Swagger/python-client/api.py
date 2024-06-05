@@ -13,7 +13,7 @@ def configure_api(api_key,ip_add):
     configuration.api_key_prefix['authorization'] = 'Bearer'
 
     api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
-                                                            
+                                
     return api_instance
 
 def list_nodes(api_instance):
@@ -322,11 +322,46 @@ def list_ingress(ip_add, api_key):
         api_instance = swagger_client.NetworkingV1Api(swagger_client.ApiClient(configuration))
         
         api_response = api_instance.list_networking_v1_ingress_for_all_namespaces().to_dict()
-        print(json.dumps(api_response, indent=4))
+        
+        filtered_response = {
+            "ingresses": [
+                {
+                    "name": ingress["metadata"]["name"],
+                    "namespace": ingress['metadata']["namespace"],
+                    "num_rules": str(len(ingress["spec"]["rules"])),
+                }
+                for ingress in api_response.get("items", [])
+            ]
+        }
+        
+        return json.dumps(filtered_response, indent=4)
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
         
+def list_selected_ingress(ip_add, api_key, name, namespace):   
+    try:
+        configuration = swagger_client.Configuration()
+        configuration.host = f"https://{ip_add}:6443"
+        configuration.verify_ssl = False
+        configuration.api_key['authorization'] = api_key
+        configuration.api_key_prefix['authorization'] = 'Bearer'
+
+        api_instance = swagger_client.NetworkingV1Api(swagger_client.ApiClient(configuration))
+        
+        api_response = api_instance.read_networking_v1_namespaced_ingress(name, namespace).to_dict()
+        
+        filtered_response = {
+                    "name": api_response["metadata"]["name"],
+                    "namespace": api_response['metadata']["namespace"],
+                    "num_rules": str(len(api_response["spec"]["rules"])),
+                }
+        
+        return json.dumps(filtered_response, indent=4)
+
+    except ApiException as e:
+        print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)   
+
 def create_ingress(ip_add, api_key, namespace, json_contents):
     try:
         configuration = swagger_client.Configuration()
@@ -337,7 +372,7 @@ def create_ingress(ip_add, api_key, namespace, json_contents):
 
         api_instance = swagger_client.NetworkingV1Api(swagger_client.ApiClient(configuration))
         
-        api_response = api_instance.create_networking_v1_namespaced_ingress_with_http_info(namespace, json_contents).to_dict()
+        api_response = api_instance.create_networking_v1_namespaced_ingress(namespace, json_contents).to_dict()
         print(json.dumps(api_response, indent=4))
 
     except ApiException as e:
@@ -359,7 +394,7 @@ def patch_ingress(ip_add, api_key, name, namespace, json_contents):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
         
-def delete_ingress(ip_add, api_key, name, namespace, json_contents):
+def delete_ingress(ip_add, api_key, name, namespace):
     try:
         configuration = swagger_client.Configuration()
         configuration.host = f"https://{ip_add}:6443"
@@ -369,8 +404,7 @@ def delete_ingress(ip_add, api_key, name, namespace, json_contents):
 
         api_instance = swagger_client.NetworkingV1Api(swagger_client.ApiClient(configuration))
         
-        api_response = api_instance.delete_networking_v1_namespaced_ingress_with_http_info(name, namespace, json_contents).to_dict()
-        print(json.dumps(api_response, indent=4))
+        api_response = api_instance.delete_networking_v1_namespaced_ingress(name, namespace).to_dict()
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)

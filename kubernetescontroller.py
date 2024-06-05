@@ -7,6 +7,7 @@ from pod_config import Ui_PodConfig
 from container_info import Ui_ContainerInfo
 from deployment_config import Ui_DeploymentConfig
 from service_config import Ui_ServiceConfig
+from ingress_config import Ui_IngressConfig
 import sys
 import json
 import os
@@ -45,6 +46,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.selected_pod = None
         self.selected_deployment = None
         self.selected_service = None
+        self.selected_ingress = None
 
         #Connect Pages
         self.btn_page_1.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_1))
@@ -61,6 +63,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.container_info_page = None
         self.deployment_config_page = None
         self.service_config_page = None
+        self.ingress_config_page = None
         
         #Pods
         self.podsTable.clicked.connect(self.handle_podtable_item_clicked)
@@ -91,11 +94,34 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_update_service.setEnabled(False)
         self.btn_delete_service.setEnabled(False)
         
+        #Ingress
+        self.ingressTable.clicked.connect(self.handle_ingresstable_item_clicked)
+        self.btn_refresh_ingress_table.clicked.connect(self.refresh_table_ingress)
+        self.btn_add_ingress.clicked.connect(self.open_ingress_config_page)
+        self.btn_delete_ingress.clicked.connect(self.open_ingress_config_page)
+        
+        self.btn_update_ingress.setEnabled(False)
+        self.btn_delete_ingress.setEnabled(False)
+        
         self.refresh_table_node()
         self.refresh_table_namespaces()
         self.refresh_table_pods()
         self.refresh_table_deployments()
         self.refresh_table_service()
+        self.refresh_table_ingress()
+    
+    def open_ingress_config_page(self):
+        sender = self.sender()
+        if sender == self.btn_delete_ingress:
+            api.delete_ingress(self.ip_address, self.api_key, self.selected_ingress["name"], self.selected_ingress["namespace"] )
+            time.sleep(3)
+            self.refresh_table_ingress()
+            self.btn_update_ingress.setEnabled(False)
+            self.btn_delete_ingress.setEnabled(False)
+        if sender == self.btn_add_ingress:
+            self.ingress_config_page = IngressPage(self.api_instance, self.ip_address, self.api_key)
+            self.ingress_config_page.configSaved.connect(self.handleConfigSaved)
+            self.ingress_config_page.show()
     
     def open_service_config_page(self):
         sender = self.sender()  
@@ -163,6 +189,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if self.service_config_page:
             self.service_config_page.hide()
             self.refresh_table_service()
+        if self.ingress_config_page:
+            self.ingress_config_page.hide()
+            self.refresh_table_ingress()
 
     def refresh_table_node(self):
         try:
@@ -318,6 +347,35 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     
         except Exception as e:
             print(f"Error populating Services: {e}")
+            
+    def refresh_table_ingress(self):
+        try:
+            response = api.list_ingress(self.ip_address, self.api_key)
+            ingress_data = json.loads(response)
+            self.ingressTable.setRowCount(0) 
+            for row ,ingress in enumerate(ingress_data["ingresses"]):
+                name=ingress.get('name', '')
+                namespace = ingress.get('namespace', '')
+                num_rules = ingress.get('num_rules', '') 
+
+                self.ingressTable.insertRow(row)
+
+                self.ingressTable.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
+                self.ingressTable.setItem(row, 1, QtWidgets.QTableWidgetItem(namespace))
+                self.ingressTable.setItem(row, 2, QtWidgets.QTableWidgetItem(num_rules))
+
+
+                for col in range(3):
+                    item = self.ingressTable.item(row, col)
+                    if item:
+                        item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+
+
+                for col in range(3):
+                    self.ingressTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+                    
+        except Exception as e:
+            print(f"Error populating Services: {e}")
                 
     def handle_podtable_item_clicked(self, item):
         self.btn_update_pod.setEnabled(True)
@@ -346,7 +404,148 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         namespace = self.servicesTable.item(row,1).text()
         self.selected_service = api.list_selected_service(self.api_instance, name, namespace)
         self.selected_service = json.loads(self.selected_service)
+       
+    def handle_ingresstable_item_clicked(self,item):
+        self.btn_update_ingress.setEnabled(True)
+        self.btn_delete_ingress.setEnabled(True)
+        row = item.row()
+        name = self.ingressTable.item(row,0).text()
+        namespace = self.ingressTable.item(row,1).text()
+        self.selected_ingress = api.list_selected_ingress(self.ip_address, self.api_key, name, namespace)
+        self.selected_ingress = json.loads(self.selected_ingress)
+       
+       
+class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
+    configSaved = pyqtSignal()
+    def __init__(self, api_instance, ip_address, api_key):
+        super(IngressPage, self).__init__()
+        self.setupUi(self)
+        self.api_instance = api_instance
+        self.ip_address = ip_address
+        self.api_key = api_key
         
+        self.rules = []
+
+        # Populate namespaces dropdown
+        response = api.list_namespaces(self.api_instance)
+        namespace_data = json.loads(response)
+        namespace_options = [ns.get('name', '') for ns in namespace_data["namespaces"]]
+        self.namespaces.addItems(namespace_options)
+
+        # Populate path types dropdown
+        path_types = ["Prefix", "Exact", "ImplementationSpecific"]
+        self.path_types.addItems(path_types)
+
+        # Connect buttons
+        self.btn_apply_ingress.clicked.connect(self.save_configuration)
+        self.btn_cancel_ingress.clicked.connect(self.close)
+        self.btn_add_rule.clicked.connect(self.add_rule_to_table)
+        self.btn_remove_rule.clicked.connect(self.remove_selected_rule)
+
+
+        for col in range(5):
+            self.rulesTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+
+    def add_rule_to_table(self):
+        host = self.line_host.text()
+        path = self.line_path.text()
+        path_type = self.path_types.currentText()
+        service_name = self.line_service_name.text()
+        port = self.line_port.text()
+        
+        if not host or not path or not service_name or not port:
+            self.show_error("Please fill in all rule fields.")
+            return
+        
+        if not port.isdigit():
+            self.show_error("Port must be a number.")
+            return
+        
+        row_count = self.rulesTable.rowCount()
+        self.rulesTable.insertRow(row_count)
+        self.rulesTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(host))
+        self.rulesTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(path)) 
+        self.rulesTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(path_type))
+        self.rulesTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(service_name))
+        self.rulesTable.setItem(row_count, 4, QtWidgets.QTableWidgetItem(port))
+        
+        self.rules.append({
+            "host": host,
+            "path": path,
+            "pathType": path_type,
+            "serviceName": service_name,
+            "servicePort": int(port)
+        })
+        
+        self.clear_rule_fields()
+
+    def remove_selected_rule(self):
+        selected_items = self.rulesTable.selectedItems()
+        if not selected_items:
+            return
+
+        removed_row = selected_items[0].row()
+        host = self.rulesTable.item(removed_row, 0).text()
+        path = self.rulesTable.item(removed_row, 1).text()
+        self.rules = [r for r in self.rules if r["host"] != host or r["path"] != path]
+        self.rulesTable.removeRow(removed_row)
+
+    def save_configuration(self):
+        name = self.line_name.text().lower()
+        namespace = self.namespaces.currentText()
+
+        if not name or not self.rules:
+            self.show_error("Please provide a name and at least one rule.")
+            return
+
+        params = {
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "Ingress",
+            "metadata": {
+                "name": name,
+                "namespace": namespace
+            },
+            "spec": {
+                "rules": [
+                    {
+                        "host": rule["host"],
+                        "http": {
+                            "paths": [
+                                {
+                                    "path": rule["path"],
+                                    "pathType": rule["pathType"],
+                                    "backend": {
+                                        "service": {
+                                            "name": rule["serviceName"],
+                                            "port": {
+                                                "number": rule["servicePort"]
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    } for rule in self.rules
+                ]
+            }
+        }
+
+        api.create_ingress(self.ip_address, self.api_key, namespace, params)
+        self.configSaved.emit()
+        self.close()
+
+    def clear_rule_fields(self):
+        self.line_host.clear()
+        self.line_path.clear()
+        self.line_service_name.clear()
+        self.line_port.clear()
+
+    def show_error(self, message):
+        msg_box = QtWidgets.QMessageBox()
+        msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+        msg_box.setWindowTitle("Error")
+        msg_box.setText(message)
+        msg_box.exec_() 
 class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
     configSaved = pyqtSignal()
     def __init__(self, api_instance, ip_address, api_key):

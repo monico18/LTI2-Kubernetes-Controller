@@ -5,6 +5,7 @@ from ui_main import Ui_MainWindow
 from login import Ui_LoginPage
 from pod_config import Ui_PodConfig
 from container_info import Ui_ContainerInfo
+from deployment_config import Ui_DeploymentConfig
 import sys
 import json
 import os
@@ -41,6 +42,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         
         #Selecteds
         self.selected_pod = None
+        self.selected_deployment = None
 
         #Connect Pages
         self.btn_page_1.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_1))
@@ -55,6 +57,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #Pages
         self.pod_config_page = None
         self.container_info_page = None
+        self.deployment_config_page = None
         
         #Pods
         self.podsTable.clicked.connect(self.handle_podtable_item_clicked)
@@ -66,12 +69,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_update_pod.setEnabled(False)
         self.btn_delete_pod.setEnabled(False)
         self.btn_pod_container_details.setEnabled(False)
+        
+        #Deployments
+        self.btn_refresh_deployments_table.clicked.connect(self.refresh_table_deployments)
+        self.btn_add_deployment.clicked.connect(self.open_deployment_config_page)
+        
+        self.btn_update_deployment.setEnabled(False)
+        self.btn_delete_deployment.setEnabled(False)
 
         
         self.refresh_table_node()
         self.refresh_table_namespaces()
         self.refresh_table_pods()
         self.refresh_table_deployments()
+    
+    def open_deployment_config_page(self):
+        sender = self.sender()  
+        if sender == self.btn_delete_deployment:           
+            if self.selected_deployment:
+                api.delete_deployment(self.api_instance, self.ip_address, self.api_key, self.selected_deployment["name"], self.selected_deployment["namespace"])
+                time.sleep(3)
+                self.refresh_table_deployments()
+                self.btn_update_deployment.setEnabled(False)
+                self.btn_delete_deployment.setEnabled(False)
+        elif sender == self.btn_add_deployment:
+            self.deployment_config_page = DeploymentPage(self.api_instance, self.ip_address, self.api_key)
+            self.deployment_config_page.configSaved.connect(self.handleConfigSaved)
+            self.deployment_config_page.show()
     
     def open_pod_config_page(self):
         sender = self.sender()  
@@ -212,7 +236,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
                 self.deploymentTable.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
                 self.deploymentTable.setItem(row, 1, QtWidgets.QTableWidgetItem(namespace))
-                self.deploymentTable.setItem(row, 2, QtWidgets.QTableWidgetItem(num_replicas))
+                self.deploymentTable.setItem(row, 2, QtWidgets.QTableWidgetItem(str(num_replicas)))
 
 
                 for col in range(3):
@@ -235,6 +259,158 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         namespace = self.podsTable.item(row,1).text()
         self.selected_pod = api.list_selected_pod(self.api_instance,name,namespace)
         self.selected_pod = json.loads(self.selected_pod)
+
+class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
+    configSaved = pyqtSignal()
+    def __init__(self, api_instance, ip_address, api_key):
+        super(DeploymentPage, self).__init__()
+        self.setupUi(self)
+        self.api_instance = api_instance
+        self.ip_address = ip_address
+        self.api_key = api_key
+        
+        self.selected_pods = []
+
+        response = api.list_namespaces(self.api_instance)
+        namespace_data = json.loads(response)
+        namespace_options = []
+        for row, namespaces in enumerate(namespace_data["namespaces"]):
+            name = namespaces.get('name', '')
+            namespace_options.append(name)
+
+        self.namespaces.addItems(namespace_options)
+        
+        self.all_pods = {}
+        response_pods = api.list_pods(self.api_instance)
+        pods_data = json.loads(response_pods)
+        for pod in pods_data.get("pods", []):
+            name = pod.get('name', '')
+            namespace = pod.get('namespace', '')
+            if namespace not in self.all_pods:
+                self.all_pods[namespace] = []
+            self.all_pods[namespace].append(pod)
+        
+        self.update_pods_for_namespace()
+        
+        self.btn_apply_deploy.clicked.connect(self.save_configuration)
+        self.btn_cancel_deploy.clicked.connect(self.close)
+        self.btn_add_pod.clicked.connect(self.add_pod_to_table)
+        self.btn_remove_pod.clicked.connect(self.remove_selected_pod)
+
+        self.selected_pod = []
+        for col in range(5):
+            self.podsTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+            
+        self.namespaces.currentIndexChanged.connect(self.update_pods_for_namespace)
+        
+        
+    def update_pods_for_namespace(self):
+        self.pods.clear()
+        namespace = self.namespaces.currentText()
+        if namespace in self.all_pods:
+            for pod in self.all_pods[namespace]:
+                self.pods.addItem(pod['name'], pod)
+                
+    def add_pod_to_table(self):
+        namespace = self.namespaces.currentText()
+        pod_name = self.pods.currentText()
+        if not pod_name:
+            QtWidgets.QMessageBox.critical(self, "Error", "Please select a Pod.")
+            return
+        
+        selected_pod = next((pod for pod in self.all_pods[namespace] if pod['name'] == pod_name), None)
+        if selected_pod:
+            self.selected_pods.append(selected_pod)
+            row_count = self.podsTable.rowCount()
+            self.podsTable.insertRow(row_count)
+            self.podsTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(pod_name))
+            self.podsTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(namespace))
+            self.podsTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(selected_pod.get('pod_ip', 'N/A')))
+            self.podsTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(selected_pod.get('status', 'Unknown')))
+            self.podsTable.setItem(row_count, 4, QtWidgets.QTableWidgetItem(selected_pod.get('num_containers', '0')))
+
+        else:
+            QtWidgets.QMessageBox.critical(self, "Error", f"Pod '{pod_name}' not found in namespace '{namespace}'.")
+            
+    def remove_selected_pod(self):
+        selected_items = self.podsTable.selectedItems()
+        if not selected_items:
+            return
+
+        for item in selected_items:
+            self.podsTable.removeRow(item.row())
+
+    def save_configuration(self):
+        if not self.selected_pods:
+            QtWidgets.QMessageBox.critical(self, "Error", "Please add at least one Pod to the table.")
+            return
+
+        name = self.line_name.text().lower()
+        namespace = self.namespaces.currentText()
+        replicas = self.line_replicas.text()
+
+        if not replicas.isdigit() or int(replicas) < 1:
+            QtWidgets.QMessageBox.critical(self, "Error", "Please insert a valid number of replicas (1 or more).")
+            return
+
+        containers = []
+        for pod in self.selected_pods:
+            pod_name = pod.get('name')
+            pod_namespace = pod.get('namespace')
+            pod_info_str = api.list_selected_pod(self.api_instance, pod_name, pod_namespace)
+            pod_info = json.loads(pod_info_str)
+            if pod_info:
+                for container in pod_info.get('containers', []):
+                    container_info = {
+                        "name": container.get('name'),
+                        "image": container.get('image'),
+                        "ports": [
+                            {
+                                "containerPort": port.get('container_port')
+                            }
+                            for port in container.get('ports', [])
+                        ]
+                    }
+                    containers.append(container_info)
+
+        if not containers:
+            QtWidgets.QMessageBox.critical(self, "Error", "The selected Pods have no containers.")
+            return
+        
+        params = {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": {
+                    "app": name
+                }
+            },
+            "spec": {
+                "replicas": int(replicas),
+                "selector": {
+                    "matchLabels": {
+                        "app": name
+                    }
+                },
+                "template": {
+                    "metadata": {
+                        "labels": {
+                            "app": name
+                        }
+                    },
+                    "spec": {
+                        "containers": containers
+                    }
+                }
+            }
+        }
+
+        api.create_deployment(self.ip_address,self.api_key, namespace, params)
+
+        self.configSaved.emit()
+        self.close()
 
 class ContainerInfo(QtWidgets.QMainWindow, Ui_ContainerInfo):
     def __init__(self):

@@ -167,7 +167,7 @@ def list_deployments(ip_add, api_key):
                 {
                     "name": deploy["metadata"]["name"],
                     "namespace": deploy['metadata']["namespace"],
-                    "num_replicas": deploy["status"]["replicas"],
+                    "num_replicas": deploy["spec"]["replicas"],
                }
                 for deploy in api_response.get("items", [])
                 if deploy["metadata"]["name"] not in excluded_deploys
@@ -189,7 +189,7 @@ def create_deployment(ip_add, api_key, namespace, json_contents):
 
         api_instance = swagger_client.AppsV1Api(swagger_client.ApiClient(configuration))
         
-        api_response = api_instance.create_apps_v1_namespaced_deployment_with_http_info(namespace, json_contents).to_dict()
+        api_response = api_instance.create_apps_v1_namespaced_deployment(namespace, json_contents).to_dict()
         print(json.dumps(api_response, indent=4))
 
     except ApiException as e:

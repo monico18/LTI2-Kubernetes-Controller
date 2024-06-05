@@ -71,8 +71,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_pod_container_details.setEnabled(False)
         
         #Deployments
+        self.deploymentTable.clicked.connect(self.handle_deploytable_item_clicked)
         self.btn_refresh_deployments_table.clicked.connect(self.refresh_table_deployments)
         self.btn_add_deployment.clicked.connect(self.open_deployment_config_page)
+        self.btn_delete_deployment.clicked.connect(self.open_deployment_config_page)
         
         self.btn_update_deployment.setEnabled(False)
         self.btn_delete_deployment.setEnabled(False)
@@ -87,7 +89,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         sender = self.sender()  
         if sender == self.btn_delete_deployment:           
             if self.selected_deployment:
-                api.delete_deployment(self.api_instance, self.ip_address, self.api_key, self.selected_deployment["name"], self.selected_deployment["namespace"])
+                api.delete_deployment(self.ip_address, self.api_key, self.selected_deployment["name"], self.selected_deployment["namespace"])
                 time.sleep(3)
                 self.refresh_table_deployments()
                 self.btn_update_deployment.setEnabled(False)
@@ -259,6 +261,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         namespace = self.podsTable.item(row,1).text()
         self.selected_pod = api.list_selected_pod(self.api_instance,name,namespace)
         self.selected_pod = json.loads(self.selected_pod)
+    
+    def handle_deploytable_item_clicked(self, item):
+        self.btn_update_deployment.setEnabled(True)
+        self.btn_delete_deployment.setEnabled(True)
+        row = item.row()
+        name = self.deploymentTable.item(row,0).text()
+        namespace = self.deploymentTable.item(row,1).text()
+        self.selected_deployment = api.list_selected_deployment(self.ip_address, self.api_key, name, namespace)
+        self.selected_deployment = json.loads(self.selected_deployment)
+        
 
 class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
     configSaved = pyqtSignal()
@@ -361,6 +373,10 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
             pod_info = json.loads(pod_info_str)
             if pod_info:
                 for container in pod_info.get('containers', []):
+                    container_ports = container.get('ports', [])
+                    if container_ports is None:
+                        container_ports = []
+
                     container_info = {
                         "name": container.get('name'),
                         "image": container.get('image'),
@@ -368,7 +384,7 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
                             {
                                 "containerPort": port.get('container_port')
                             }
-                            for port in container.get('ports', [])
+                            for port in container_ports
                         ]
                     }
                     containers.append(container_info)

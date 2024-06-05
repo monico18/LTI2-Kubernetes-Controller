@@ -179,6 +179,29 @@ def list_deployments(ip_add, api_key):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
         
+def list_selected_deployment(ip_add, api_key, name, namespace):
+    try:
+        configuration = swagger_client.Configuration()
+        configuration.host = f"https://{ip_add}:6443"
+        configuration.verify_ssl = False
+        configuration.api_key['authorization'] = api_key
+        configuration.api_key_prefix['authorization'] = 'Bearer'
+
+        api_instance = swagger_client.AppsV1Api(swagger_client.ApiClient(configuration))
+        
+        api_response = api_instance.read_apps_v1_namespaced_deployment(name=name, namespace=namespace).to_dict()
+
+        filtered_response = {
+                    "name": api_response["metadata"]["name"],
+                    "namespace": api_response['metadata']["namespace"],
+                    "num_replicas": api_response["spec"]["replicas"],
+               }
+
+        return json.dumps(filtered_response, indent=4)
+
+    except ApiException as e:
+        print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
+        
 def create_deployment(ip_add, api_key, namespace, json_contents):
     try:
         configuration = swagger_client.Configuration()
@@ -189,8 +212,7 @@ def create_deployment(ip_add, api_key, namespace, json_contents):
 
         api_instance = swagger_client.AppsV1Api(swagger_client.ApiClient(configuration))
         
-        api_response = api_instance.create_apps_v1_namespaced_deployment(namespace, json_contents).to_dict()
-        print(json.dumps(api_response, indent=4))
+        api_instance.create_apps_v1_namespaced_deployment(namespace, json_contents).to_dict()
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
@@ -221,8 +243,7 @@ def delete_deployment(ip_add, api_key, name, namespace):
 
         api_instance = swagger_client.AppsV1Api(swagger_client.ApiClient(configuration))
         
-        api_response = api_instance.delete_apps_v1_namespaced_deployment_with_http_info(name, namespace).to_dict()
-        print(json.dumps(api_response, indent=4))
+        api_instance.delete_apps_v1_namespaced_deployment(name, namespace).to_dict()
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)        

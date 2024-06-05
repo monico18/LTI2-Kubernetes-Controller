@@ -98,6 +98,7 @@ def list_pods(api_instance):
                 {
                     "name": pod["metadata"]["name"],
                     "namespace": pod['metadata']["namespace"],
+                    "label": pod["metadata"]["labels"]["app"],
                     "num_containers": str(len(pod["spec"]["containers"])),
                     "status": pod["status"]["phase"],
                     "pod_ip": pod["status"]["pod_ip"],
@@ -117,6 +118,7 @@ def list_selected_pod(api_instance, name,namespace):
 
         filtered_response = {
                     "name": api_response["metadata"]["name"],
+                    "label": api_response["metadata"]["labels"]["app"],
                     "namespace": api_response['metadata']["namespace"],
                     "containers": api_response["spec"]["containers"],
                 }
@@ -166,6 +168,7 @@ def list_deployments(ip_add, api_key):
             "deploys": [
                 {
                     "name": deploy["metadata"]["name"],
+                    "label": deploy["metadata"]["labels"]["app"],
                     "namespace": deploy['metadata']["namespace"],
                     "num_replicas": deploy["spec"]["replicas"],
                }
@@ -250,8 +253,7 @@ def delete_deployment(ip_add, api_key, name, namespace):
 
 def list_service(api_instance):
     try:
-        api_response = api_instance.list_core_v1_service_account_for_all_namespaces().to_dict()
-        print(json.dumps(api_response, indent=4))
+        api_instance.list_core_v1_service_account_for_all_namespaces().to_dict()
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)

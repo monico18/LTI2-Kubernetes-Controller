@@ -6,6 +6,7 @@ from login import Ui_LoginPage
 from pod_config import Ui_PodConfig
 from container_info import Ui_ContainerInfo
 from deployment_config import Ui_DeploymentConfig
+from service_config import Ui_ServiceConfig
 import sys
 import json
 import os
@@ -198,6 +199,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 
                 name= pods.get('name', '')
                 namespace = pods.get('namespace', '')    
+                label = pods.get('label', '')
                 num_containers = pods.get('num_containers', '')
                 status = pods.get('status', '')
                 pod_ip = pods.get('pod_ip', '')
@@ -206,19 +208,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
                 self.podsTable.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
                 self.podsTable.setItem(row, 1, QtWidgets.QTableWidgetItem(namespace))
-                self.podsTable.setItem(row, 2, QtWidgets.QTableWidgetItem(num_containers))
-                self.podsTable.setItem(row, 3, QtWidgets.QTableWidgetItem(status))
-                self.podsTable.setItem(row, 4, QtWidgets.QTableWidgetItem(pod_ip))
+                self.podsTable.setItem(row, 2, QtWidgets.QTableWidgetItem(label))
+                self.podsTable.setItem(row, 3, QtWidgets.QTableWidgetItem(num_containers))
+                self.podsTable.setItem(row, 4, QtWidgets.QTableWidgetItem(status))
+                self.podsTable.setItem(row, 5, QtWidgets.QTableWidgetItem(pod_ip))
 
 
 
-                for col in range(5):
+                for col in range(6):
                     item = self.podsTable.item(row, col)
                     if item:
                         item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
 
 
-                for col in range(5):
+                for col in range(6):
                     self.podsTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
         except Exception as e:
             print(f"Error populating Nodes: {e}")
@@ -231,23 +234,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             for row ,deploy in enumerate(deploys_data["deploys"]):
                 
                 name=deploy.get('name', '')
-                namespace = deploy.get('namespace', '')           
+                namespace = deploy.get('namespace', '')
+                label = deploy.get('label', '')           
                 num_replicas = deploy.get('num_replicas', '')  
 
                 self.deploymentTable.insertRow(row)
 
                 self.deploymentTable.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
                 self.deploymentTable.setItem(row, 1, QtWidgets.QTableWidgetItem(namespace))
-                self.deploymentTable.setItem(row, 2, QtWidgets.QTableWidgetItem(str(num_replicas)))
+                self.deploymentTable.setItem(row, 2, QtWidgets.QTableWidgetItem(label))
+                self.deploymentTable.setItem(row, 3, QtWidgets.QTableWidgetItem(str(num_replicas)))
 
 
-                for col in range(3):
+                for col in range(4):
                     item = self.deploymentTable.item(row, col)
                     if item:
                         item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
 
 
-                for col in range(3):
+                for col in range(4):
                     self.deploymentTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
         except Exception as e:
             print(f"Error populating Deployments: {e}")
@@ -282,6 +287,7 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
         self.api_key = api_key
         
         self.selected_pods = []
+        self.labels = set()
 
         response = api.list_namespaces(self.api_instance)
         namespace_data = json.loads(response)
@@ -327,20 +333,30 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
         namespace = self.namespaces.currentText()
         pod_name = self.pods.currentText()
         if not pod_name:
-            QtWidgets.QMessageBox.critical(self, "Error", "Please select a Pod.")
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Please select a Pod.")
+            msg_box.exec_()
             return
         
         selected_pod = next((pod for pod in self.all_pods[namespace] if pod['name'] == pod_name), None)
+        self.labels.add(selected_pod.get('label', {}))
         if selected_pod:
             self.selected_pods.append(selected_pod)
             row_count = self.podsTable.rowCount()
             self.podsTable.insertRow(row_count)
             self.podsTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(pod_name))
             self.podsTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(namespace))
-            self.podsTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(selected_pod.get('pod_ip', 'N/A')))
-            self.podsTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(selected_pod.get('status', 'Unknown')))
-            self.podsTable.setItem(row_count, 4, QtWidgets.QTableWidgetItem(selected_pod.get('num_containers', '0')))
-
+            self.podsTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(selected_pod.get('label', ' ')))
+            self.podsTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(selected_pod.get('pod_ip', 'N/A')))
+            self.podsTable.setItem(row_count, 4, QtWidgets.QTableWidgetItem(selected_pod.get('status', 'Unknown')))
+            self.podsTable.setItem(row_count, 5, QtWidgets.QTableWidgetItem(selected_pod.get('num_containers', '0')))
+            
+            for col in range(6):
+                    item = self.podsTable.item(row_count, col)
+                    if item:
+                        item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
         else:
             QtWidgets.QMessageBox.critical(self, "Error", f"Pod '{pod_name}' not found in namespace '{namespace}'.")
             
@@ -350,7 +366,16 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
             return
 
         for item in selected_items:
-            self.podsTable.removeRow(item.row())
+            removed_row = item.row()
+            namespace = self.podsTable.item(removed_row, 1).text()
+            label = self.podsTable.item(removed_row, 2).text() 
+            
+            print(label)
+            print(self.labels)
+            if label in self.labels:
+                self.labels.remove(label)
+            
+            self.podsTable.removeRow(removed_row)
 
     def save_configuration(self):
         if not self.selected_pods:
@@ -358,11 +383,16 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
             return
 
         name = self.line_name.text().lower()
+        label = self.line_label.text().lower()
         namespace = self.namespaces.currentText()
         replicas = self.line_replicas.text()
 
         if not replicas.isdigit() or int(replicas) < 1:
-            QtWidgets.QMessageBox.critical(self, "Error", "Please insert a valid number of replicas (1 or more).")
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Please insert a valid number of replicas (1 or more)")
+            msg_box.exec_()
             return
 
         containers = []
@@ -371,6 +401,7 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
             pod_namespace = pod.get('namespace')
             pod_info_str = api.list_selected_pod(self.api_instance, pod_name, pod_namespace)
             pod_info = json.loads(pod_info_str)
+            
             if pod_info:
                 for container in pod_info.get('containers', []):
                     container_ports = container.get('ports', [])
@@ -388,9 +419,21 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
                         ]
                     }
                     containers.append(container_info)
+                    
+        if len(self.labels) != 1:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("All selected Pods must have the same label.")
+            msg_box.exec_()
+            return
 
         if not containers:
-            QtWidgets.QMessageBox.critical(self, "Error", "The selected Pods have no containers.")
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("The selected Pods have no containers.")
+            msg_box.exec_()
             return
         
         params = {
@@ -400,7 +443,7 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
                 "name": name,
                 "namespace": namespace,
                 "labels": {
-                    "app": name
+                    "app": label
                 }
             },
             "spec": {
@@ -514,6 +557,11 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
         self.containersTable.insertRow(row_count)
         self.containersTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(image))
         self.containersTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(container_port))
+        
+        for col in range(3):
+                    item = self.podsTable.item(row_count, col)
+                    if item:
+                        item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
 
     def remove_selected_container(self):
         selected_items = self.containersTable.selectedItems()
@@ -525,6 +573,7 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
     
     def save_configuration(self):
         name = self.line_name.text().lower()
+        label = self.line_label.text().lower()
         namespace = self.namespaces.currentText()
         containers = []
         row_count = self.containersTable.rowCount()
@@ -572,7 +621,7 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
                 "name": name,
                 "namespace": namespace,
                 "labels": {
-                    "app": name
+                    "app": label
                 }
             },
             "spec": {

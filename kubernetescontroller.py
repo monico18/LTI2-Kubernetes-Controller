@@ -546,6 +546,7 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         msg_box.setWindowTitle("Error")
         msg_box.setText(message)
         msg_box.exec_() 
+
 class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
     configSaved = pyqtSignal()
     def __init__(self, api_instance, ip_address, api_key):
@@ -690,9 +691,6 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
         self.ip_address = ip_address
         self.api_key = api_key
         
-        self.selected_pods = []
-        self.labels = set()
-
         response = api.list_namespaces(self.api_instance)
         namespace_data = json.loads(response)
         namespace_options = []
@@ -703,89 +701,50 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
         self.namespaces.addItems(namespace_options)
         
         self.all_pods = {}
-        response_pods = api.list_pods(self.api_instance)
-        pods_data = json.loads(response_pods)
-        for pod in pods_data.get("pods", []):
-            name = pod.get('name', '')
-            namespace = pod.get('namespace', '')
-            if namespace not in self.all_pods:
-                self.all_pods[namespace] = []
-            self.all_pods[namespace].append(pod)
-        
-        self.update_pods_for_namespace()
-        
+        image_options = ["nginx", "httpd", "mysql", "redis", "mongo", "alpine", "busybox", "node", "python", "k8s.gcr.io/pause"]
+        self.container_images.addItems(image_options)
+                
         self.btn_apply_deploy.clicked.connect(self.save_configuration)
         self.btn_cancel_deploy.clicked.connect(self.close)
-        self.btn_add_pod.clicked.connect(self.add_pod_to_table)
-        self.btn_remove_pod.clicked.connect(self.remove_selected_pod)
+        self.btn_add_cont.clicked.connect(self.add_container_to_table)
+        self.btn_remove_cont.clicked.connect(self.remove_selected_container)
 
         self.selected_pod = []
-        for col in range(5):
-            self.podsTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
-            
-        self.namespaces.currentIndexChanged.connect(self.update_pods_for_namespace)
+        for col in range(2):
+            self.containersTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+                    
         
-        
-    def update_pods_for_namespace(self):
-        self.pods.clear()
-        namespace = self.namespaces.currentText()
-        if namespace in self.all_pods:
-            for pod in self.all_pods[namespace]:
-                self.pods.addItem(pod['name'], pod)
-                
-    def add_pod_to_table(self):
-        namespace = self.namespaces.currentText()
-        pod_name = self.pods.currentText()
-        if not pod_name:
+    def add_container_to_table(self):
+        image = self.container_images.currentText()
+        container_port = self.line_container_port.text()
+
+        if not container_port.isdigit() or not (0 <= int(container_port) <= 65535):
             msg_box = QtWidgets.QMessageBox()
             msg_box.setIcon(QtWidgets.QMessageBox.Critical)
             msg_box.setWindowTitle("Error")
-            msg_box.setText("Please select a Pod.")
+            msg_box.setText("Please insert a valid port")
             msg_box.exec_()
             return
+
+        row_count = self.containersTable.rowCount()
+        self.containersTable.insertRow(row_count)
+        self.containersTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(image))
+        self.containersTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(container_port))
         
-        selected_pod = next((pod for pod in self.all_pods[namespace] if pod['name'] == pod_name), None)
-        self.labels.add(selected_pod.get('label', {}))
-        if selected_pod:
-            self.selected_pods.append(selected_pod)
-            row_count = self.podsTable.rowCount()
-            self.podsTable.insertRow(row_count)
-            self.podsTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(pod_name))
-            self.podsTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(namespace))
-            self.podsTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(selected_pod.get('label', ' ')))
-            self.podsTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(selected_pod.get('pod_ip', 'N/A')))
-            self.podsTable.setItem(row_count, 4, QtWidgets.QTableWidgetItem(selected_pod.get('status', 'Unknown')))
-            self.podsTable.setItem(row_count, 5, QtWidgets.QTableWidgetItem(selected_pod.get('num_containers', '0')))
-            
-            for col in range(6):
-                    item = self.podsTable.item(row_count, col)
-                    if item:
-                        item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
-        else:
-            QtWidgets.QMessageBox.critical(self, "Error", f"Pod '{pod_name}' not found in namespace '{namespace}'.")
-            
-    def remove_selected_pod(self):
-        selected_items = self.podsTable.selectedItems()
+        for col in range(2):
+            item = self.containersTable.item(row_count, col)
+            if item:
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
+
+    def remove_selected_container(self):
+        selected_items = self.containersTable.selectedItems()
         if not selected_items:
             return
 
         for item in selected_items:
-            removed_row = item.row()
-            namespace = self.podsTable.item(removed_row, 1).text()
-            label = self.podsTable.item(removed_row, 2).text() 
+            self.containersTable.removeRow(item.row())
             
-            print(label)
-            print(self.labels)
-            if label in self.labels:
-                self.labels.remove(label)
-            
-            self.podsTable.removeRow(removed_row)
-
     def save_configuration(self):
-        if not self.selected_pods:
-            QtWidgets.QMessageBox.critical(self, "Error", "Please add at least one Pod to the table.")
-            return
-
         name = self.line_name.text().lower()
         label = self.line_label.text().lower()
         namespace = self.namespaces.currentText()
@@ -800,43 +759,43 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
             return
 
         containers = []
-        for pod in self.selected_pods:
-            pod_name = pod.get('name')
-            pod_namespace = pod.get('namespace')
-            pod_info_str = api.list_selected_pod(self.api_instance, pod_name, pod_namespace)
-            pod_info = json.loads(pod_info_str)
+        row_count = self.containersTable.rowCount()
+
+        for row in range(row_count):
+            image_item = self.containersTable.item(row, 0)
+            port_item = self.containersTable.item(row, 1)
             
-            if pod_info:
-                for container in pod_info.get('containers', []):
-                    container_ports = container.get('ports', [])
-                    if container_ports is None:
-                        container_ports = []
-
-                    container_info = {
-                        "name": container.get('name'),
-                        "image": container.get('image'),
-                        "ports": [
-                            {
-                                "containerPort": port.get('container_port')
-                            }
-                            for port in container_ports
-                        ]
+            
+            if image_item is None or port_item is None:
+                continue
+            
+            image = image_item.text()
+            container_port = port_item.text()
+            
+            
+            if not container_port.isdigit() or not (0 <= int(container_port) <= 65535):
+                msg_box = QtWidgets.QMessageBox()
+                msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+                msg_box.setWindowTitle("Error")
+                msg_box.setText(f"Please insert a valid port for row {row + 1}")
+                msg_box.exec_()
+                return
+            
+            containers.append({
+                "name": image,
+                "image": f"{image}:latest",
+                "ports": [
+                    {
+                        "containerPort": int(container_port)
                     }
-                    containers.append(container_info)
-                    
-        if len(self.labels) != 1:
-            msg_box = QtWidgets.QMessageBox()
-            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-            msg_box.setWindowTitle("Error")
-            msg_box.setText("All selected Pods must have the same label.")
-            msg_box.exec_()
-            return
-
+                ]
+            })
+    
         if not containers:
             msg_box = QtWidgets.QMessageBox()
             msg_box.setIcon(QtWidgets.QMessageBox.Critical)
             msg_box.setWindowTitle("Error")
-            msg_box.setText("The selected Pods have no containers.")
+            msg_box.setText("Please add at least one container")
             msg_box.exec_()
             return
         

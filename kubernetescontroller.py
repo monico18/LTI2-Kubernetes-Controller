@@ -47,6 +47,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.selected_deployment = None
         self.selected_service = None
         self.selected_ingress = None
+        self.selected_namespace = None
 
         #Connect Pages
         self.btn_page_1.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_1))
@@ -57,13 +58,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_page_6.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_6))
         self.btn_page_7.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_7))
 
-        
         #Pages
         self.pod_config_page = None
         self.container_info_page = None
         self.deployment_config_page = None
         self.service_config_page = None
         self.ingress_config_page = None
+        
+        #Namespace
+        self.namespaceTable.clicked.connect(self.handle_namespacetable_item_clicked)
+        self.btn_refresh_namespace_table.clicked.connect(self.refresh_table_namespaces)
+        self.btn_add_namespace.clicked.connect(self.add_new_namespace)
+        self.btn_delete_namespace.clicked.connect(self.rem_namespace)
+        
+        self.btn_update_namespace.setEnabled(False)
+        self.btn_delete_namespace.setEnabled(False)
         
         #Pods
         self.podsTable.clicked.connect(self.handle_podtable_item_clicked)
@@ -109,6 +118,34 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.refresh_table_deployments()
         self.refresh_table_service()
         self.refresh_table_ingress()
+    
+    def rem_namespace(self):
+        api.delete_namespace(self.api_instance, self.selected_namespace["name"])
+        time.sleep(3)
+        self.refresh_table_namespaces()
+        self.btn_update_namespace.setEnabled(False)
+        self.btn_delete_namespace.setEnabled(False)
+        
+    def add_new_namespace(self):
+        namespace_name = self.line_namespace.text().lower()
+        try:
+
+            namespace_payload = {
+                "apiVersion": "v1",
+                "kind": "Namespace",
+                "metadata": {
+                    "name": namespace_name
+                },
+                "spec": {
+                    "finalizers": ["kubernetes"]
+                }
+            }
+
+            # Call the API to create the namespace
+            api.create_namespace(self.api_instance, namespace_payload)
+            self.refresh_table_namespaces()
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Error", str(e))
     
     def open_ingress_config_page(self):
         sender = self.sender()
@@ -376,6 +413,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     
         except Exception as e:
             print(f"Error populating Services: {e}")
+                
+    def handle_namespacetable_item_clicked(self,item):
+        self.btn_update_namespace.setEnabled(True)
+        self.btn_delete_namespace.setEnabled(True) 
+        row = item.row()
+        name = self.namespaceTable.item(row,0).text()
+        self.selected_namespace = api.list_selected_namespace(self.api_instance, name)  
+        self.selected_namespace = json.loads(self.selected_namespace)     
                 
     def handle_podtable_item_clicked(self, item):
         self.btn_update_pod.setEnabled(True)

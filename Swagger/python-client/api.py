@@ -13,7 +13,7 @@ def configure_api(api_key,ip_add):
     configuration.api_key_prefix['authorization'] = 'Bearer'
 
     api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
-                                
+       
     return api_instance
 
 def list_nodes(api_instance):
@@ -56,12 +56,24 @@ def list_namespaces(api_instance):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_namespace: %s\n" % e)
 
+def list_selected_namespace(api_instance, name):
+    try:
+        api_response = api_instance.read_core_v1_namespace(name).to_dict()
+        
+        filtered_response = {
+                    "name": api_response["metadata"]["name"],
+                    "status": api_response["status"]["phase"],
+                }
+
+
+        return json.dumps(filtered_response, indent=4)
+    except ApiException as e:
+        print("Exception when calling CoreV1Api->list_core_v1_namespace: %s\n" % e)
+
 def create_namespace(api_instance,json_content):
     try:
-        api_response = api_instance.create_core_v1_namespace(json_content).to_dict()
+        api_instance.create_core_v1_namespace(json_content).to_dict()
         
-        print(json.dumps(api_response, indent=4))
-
     except ApiException as e :
         print("Exception when calling CoreV1Api->list_core_v1_namespace: %s\n" % e)
 
@@ -75,8 +87,7 @@ def update_namespace(api_instance,name,json_content):
 
 def delete_namespace(api_instance,name):
     try:
-        api_response = api_instance.delete_core_v1_namespace(name).to_dict()
-        print(json.dumps(api_response, indent=4))
+        api_instance.delete_core_v1_namespace(name).to_dict()
 
     except ApiException as e :
         print("Exception when calling CoreV1Api->list_core_v1_namespace: %s\n" % e)
@@ -306,7 +317,6 @@ def patch_service(api_instance, name, namespace, json_content):
 def delete_service(api_instance, name, namespace):
     try:
         api_response = api_instance.delete_core_v1_namespaced_service(name, namespace).to_dict()
-        print(json.dumps(api_response, indent=4))
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)

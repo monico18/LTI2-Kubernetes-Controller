@@ -610,18 +610,20 @@ class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
             name = namespaces.get('name', '')
             namespace_options.append(name)
             
-        response_labels = api.list_pods(self.api_instance)
+        response_labels = api.list_deployments(self.ip_address, self.api_key)
         labels_data = json.loads(response_labels)
         labels_options = set()
-        for labels in labels_data['pods']:
+        for labels in labels_data['deploys']:
             label = labels.get('label', '')
             labels_options.add(label)
             
-        protocol_options = ["TCP","UDP"]
+        protocol_options = ["TCP","UDP","SCTP"]
+        load_balancer_options = ["ClusterIP ","NodePort","LoadBalancer","ExternalName","Headless"]
 
         self.namespaces.addItems(namespace_options)
-        self.pod_labels.addItems(sorted(labels_options))
+        self.deploy_labels.addItems(sorted(labels_options))
         self.protocol.addItems(protocol_options)
+        self.load_balancer_type.addItems(load_balancer_options)
         
         self.btn_apply_service.clicked.connect(self.save_configuration)
         self.btn_cancel_service.clicked.connect(self.close)
@@ -686,7 +688,8 @@ class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
         name = self.line_name.text().lower()
         label = self.line_label.text().lower()
         namespace = self.namespaces.currentText()
-        pod_label = self.pod_labels.currentText()
+        deploy_label = self.deploy_labels.currentText()
+        load_balancer = self.load_balancer_type.currentText()
 
         if not name or not label:
             msg_box = QtWidgets.QMessageBox()
@@ -716,9 +719,10 @@ class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
             },
             "spec": {
                 "selector": {
-                    "app": pod_label
+                    "app": deploy_label
                 },
-                "ports": self.ports
+                "ports": self.ports,
+                "type": load_balancer
             }
         }
 

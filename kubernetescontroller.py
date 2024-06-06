@@ -169,6 +169,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.ingress_config_page.configSaved.connect(self.handleConfigSaved)
             self.ingress_config_page.show()
         if sender == self.ingress_rules_info_page:
+            rules = self.selected_ingress.get('rules', [])
+            if not rules:
+                QtWidgets.QMessageBox.critical(self, "Error", "The selected ingress has no rules.")
+                return
+            
             self.ingress_rules_info_page = IngressRulesInfo()
             self.ingress_rules_info_page.fill_ingress_rules_info(self.selected_ingress)
             self.ingress_rules_info_page.show()
@@ -182,10 +187,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.btn_update_service.setEnabled(False)
             self.btn_delete_service.setEnabled(False)
         if sender == self.btn_add_service:
-            self.service_config_page = ServicePage(self.api_instance, self.ip_address, self.api_key)
+            self.service_config_page = ServicePage(self.api_instance, self.ip_address, self.api_key, self.api_port)
             self.service_config_page.configSaved.connect(self.handleConfigSaved)
             self.service_config_page.show()
         if sender == self.btn_service_port:
+            ports = self.selected_service.get('ports', [])
+            if not ports:
+                QtWidgets.QMessageBox.critical(self, "Error", "The selected service has no ports.")
+                return
             self.service_port_info_page = ServicePortInfo()
             self.service_port_info_page.fill_service_port_info(self.selected_service)
             self.service_port_info_page.show()
@@ -229,6 +238,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.pod_config_page.configSaved.connect(self.handleConfigSaved)
             self.pod_config_page.show()
         if sender == self.btn_pod_container_details:
+            containers = self.selected_pod.get('containers', [])
+            ports = []
+            for container in containers:
+                container_ports = container.get('ports')
+                if container_ports is not None:
+                    ports.extend(container_ports)
+
+            if not ports:
+                QtWidgets.QMessageBox.critical(self, "Error", "The selected pod has no containers.")
+                return
             self.container_info_page = ContainerInfo()
             self.container_info_page.fill_container_info(self.selected_pod)
             self.container_info_page.show()
@@ -653,12 +672,13 @@ class ServicePortInfo(QtWidgets.QMainWindow, Ui_ServicePortInfo):
 
 class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
     configSaved = pyqtSignal()
-    def __init__(self, api_instance, ip_address, api_key):
+    def __init__(self, api_instance, ip_address, api_key, api_port):
         super(ServicePage, self).__init__()
         self.setupUi(self)
         self.api_instance = api_instance
         self.ip_address = ip_address
         self.api_key = api_key
+        self.api_port = api_port
         
         self.ports = []
 
@@ -669,7 +689,7 @@ class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
             name = namespaces.get('name', '')
             namespace_options.append(name)
             
-        response_labels = api.list_deployments(self.ip_address, self.api_key)
+        response_labels = api.list_deployments(self.ip_address, self.api_key, self.api_port)
         labels_data = json.loads(response_labels)
         labels_options = set()
         for labels in labels_data['deploys']:

@@ -23,6 +23,7 @@ import time
 import importlib.util
 import seaborn as sns
 import matplotlib.pyplot as plt
+import pandas as pd
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 api_directory = os.path.join(os.path.dirname(__file__), 'Swagger', 'python-client')
@@ -64,7 +65,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_page_7.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_7))
 
         #Dashboard
-        self.dashboard_layout = QtWidgets.QVBoxLayout(self.groupBox)
+        self.dashboard_node_layout = QtWidgets.QHBoxLayout(self.groupBox)
+        self.dashboard_pod_layout = QtWidgets.QHBoxLayout(self.groupBox_Pod)
+        
         self.plot_dashboard()
         
 
@@ -136,17 +139,203 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.refresh_table_ingress()
     
     def plot_dashboard(self):
-        # Create a Seaborn plot
-        fig, ax = plt.subplots()
-        sns.set(style="whitegrid")
-        tips = sns.load_dataset("tips")
-        sns.barplot(x="day", y="total_bill", data=tips, ax=ax)
-        ax.set_title('Seaborn Plot')
+        # Clear previous widgets
+        self.clear_layout(self.dashboard_node_layout.layout())
+        self.clear_layout(self.dashboard_pod_layout.layout())
+
+        # Plot the existing graphs
+        self.plot_cpu_usage()
+        self.plot_memory_usage()
+
+        # Plot pods information
+        self.plot_pods_cpu()
+        self.plot_pods_mem()
+
+    def plot_cpu_usage(self):
+        node_info_str = api.nodes_info(self.ip_address, self.api_key, self.api_port)
+        node_info = json.loads(node_info_str)
+        names = [node["name"] for node in node_info["nodes_info"]]
+        cpu_usages = []
+        for node in node_info["nodes_info"]:
+            cpu_usage_str = node["cpu_usage"]
+            if 'n' in cpu_usage_str:
+                cpu_usages.append(int(cpu_usage_str.strip('n')) / 1e9)  
+            elif 'u' in cpu_usage_str:
+                cpu_usages.append(int(cpu_usage_str.strip('u')) / 1e6) 
+
+        # Set the background color
+        background_color = (45 / 255, 45 / 255, 45 / 255)  # RGB(45, 45, 45) in normalized form
+        plt.rcParams['figure.facecolor'] = background_color
+
+        # Create CPU Usage Bar Chart
+        fig_cpu, ax_cpu = plt.subplots(figsize=(5, 3))  # Smaller figure size
+        ax_cpu.set_facecolor(background_color)
+        sns.barplot(x=names, y=cpu_usages, ax=ax_cpu, palette="light:#d3d3d3")
+        ax_cpu.set_title('Current CPU Usage per Node', color='white')
+        ax_cpu.set_xlabel('Node', color='white')
+        ax_cpu.set_ylabel('CPU Usage (Cores)', color='white')
+        ax_cpu.tick_params(axis='x', colors='white')
+        ax_cpu.tick_params(axis='y', colors='white')
+        fig_cpu.tight_layout()
+
+        # Create a Canvas to embed the plots
+        canvas_cpu = FigureCanvas(fig_cpu)
+
+        # Add the plot to the group box
+        self.dashboard_node_layout.layout().addWidget(canvas_cpu)
+
+    def plot_memory_usage(self):
+        node_info_str = api.nodes_info(self.ip_address, self.api_key, self.api_port)
+        node_info = json.loads(node_info_str)
+        names = [node["name"] for node in node_info["nodes_info"]]
+        memory_usages = [int(node["memory_usage"].strip('Ki')) / 1024 for node in node_info["nodes_info"]]  # Convert from Ki to Mi
+
+        # Set the background color
+        background_color = (45 / 255, 45 / 255, 45 / 255)  # RGB(45, 45, 45) in normalized form
+        plt.rcParams['figure.facecolor'] = background_color
+
+        # Create Memory Usage Bar Chart
+        fig_memory, ax_memory = plt.subplots(figsize=(5, 3))  # Smaller figure size
+        ax_memory.set_facecolor(background_color)
+        sns.barplot(x=names, y=memory_usages, ax=ax_memory, palette="light:#d3d3d3")
+        ax_memory.set_title('Current Memory Usage per Node', color='white')
+        ax_memory.set_xlabel('Node', color='white')
+        ax_memory.set_ylabel('Memory Usage (Mi)', color='white')
+        ax_memory.tick_params(axis='x', colors='white')
+        ax_memory.tick_params(axis='y', colors='white')
+        fig_memory.tight_layout()
+
+        # Create a Canvas to embed the plots
+        canvas_memory = FigureCanvas(fig_memory)
+
+        # Add the plot to the group box
+        self.dashboard_node_layout.layout().addWidget(canvas_memory)
+        
+    def plot_pods_cpu(self, namespace="default"):
+        # Retrieve pod CPU usage information
+        pods_cpu_info_str = api.pods_info(self.ip_address, self.api_key, self.api_port, namespace)
+        pods_cpu_info = json.loads(pods_cpu_info_str)
+
+        pod_names = []
+        container_names = []
+        cpu_usages = []
+
+        for pod in pods_cpu_info["pods_info"]:
+            pod_name = pod["name"]
+            for container in pod["container_info"]:
+                cpu_usage = int(container["usage"]["cpu"].strip('n')) / 1e9  # Convert from nanocores to cores
+                if cpu_usage > 0:
+                    pod_names.append(pod_name)
+                    container_names.append(container["name"])
+                    cpu_usages.append(cpu_usage)
+                
+
+        # Create a DataFrame for the data
+        data = pd.DataFrame({
+            "Pod": pod_names,
+            "Container": container_names,
+            "CPU Usage (Cores)": cpu_usages
+        })
+
+        # Define a color palette
+        palette = sns.color_palette("pastel")
+
+        # Create the catplot for CPU usage
+        g = sns.catplot(
+            data=data,
+            x="Pod",
+            y="CPU Usage (Cores)",
+            hue="Container",
+            kind="bar",
+            height=3,
+            aspect=3,
+            palette=palette
+        )
+
+        # Set plot titles and labels
+        g.fig.suptitle('CPU Usage by Pod and Container', color='white')
+        g.set_xlabels('Pod', color='white')
+        g.set_ylabels('CPU Usage (Cores)', color='white')
+        plt.xticks(color='white', rotation=0)
+        plt.yticks(color='white')
+
+        # Add legend
+        background_color = (255 / 255, 255 / 255, 255 / 255)
+        plt.legend(title='Container', title_fontsize='13', fontsize='10', facecolor=background_color, edgecolor=background_color)
+
+        # Adjust plot layout
+        plt.tight_layout()
 
         # Create a Canvas to embed the plot
-        canvas = FigureCanvas(fig)
-        self.dashboard_layout.addWidget(canvas)
-        
+        canvas = FigureCanvas(g.fig)
+
+        # Add the plot to the pod information layout
+        self.dashboard_pod_layout.layout().addWidget(canvas)
+
+    def plot_pods_mem(self, namespace="default"):
+        # Retrieve pod memory usage information
+        pods_mem_info_str = api.pods_info(self.ip_address, self.api_key, self.api_port, namespace)
+        pods_mem_info = json.loads(pods_mem_info_str)
+
+        pod_names = []
+        container_names = []
+        memory_usages = []
+
+        for pod in pods_mem_info["pods_info"]:
+            pod_name = pod["name"]
+            for container in pod["container_info"]:
+                pod_names.append(pod_name)
+                container_names.append(container["name"])
+                memory_usages.append(int(container["usage"]["memory"].strip('Ki')) / 1024)
+
+        # Create a DataFrame for the data
+        data = pd.DataFrame({
+            "Pod": pod_names,
+            "Container": container_names,
+            "Memory Usage (Mi)": memory_usages
+        })
+
+        # Define a color palette
+        palette = sns.color_palette("pastel")
+
+        # Create the catplot for memory usage
+        g = sns.catplot(
+            data=data,
+            x="Pod",
+            y="Memory Usage (Mi)",
+            hue="Container",
+            kind="bar",
+            height=3,
+            aspect=2,
+            palette=palette
+        )
+
+        # Set plot titles and labels
+        g.fig.suptitle('Memory Usage by Pod and Container', color='white')
+        g.set_xlabels('Pod', color='white')
+        g.set_ylabels('Memory Usage (Mi)', color='white')
+        plt.xticks(color='white', rotation=0)
+        plt.yticks(color='white')
+
+        # Add legend
+        background_color = (255 / 255, 255 / 255, 255 / 255)
+        plt.legend(title='Container', title_fontsize='13', fontsize='10', facecolor=background_color, edgecolor=background_color)
+
+        # Adjust plot layout
+        plt.tight_layout()
+
+        # Create a Canvas to embed the plot
+        canvas = FigureCanvas(g.fig)
+
+        # Add the plot to the pod information layout
+        self.dashboard_pod_layout.layout().addWidget(canvas)
+
+    def clear_layout(self, layout):
+        while layout.count():
+            child = layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            
     def rem_namespace(self):
         api.delete_namespace(self.api_instance, self.selected_namespace["name"])
         time.sleep(3)
@@ -1018,7 +1207,7 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
 
         self.namespaces.addItems(namespace_options)
         
-        image_options = ["nginx", "httpd", "mysql", "redis", "mongo", "alpine", "busybox", "node", "python", "k8s.gcr.io/pause"]
+        image_options = ["nginx", "httpd", "mysql", "redis", "mongo", "alpine", "node", "python"]
 
         self.container_images.addItems(image_options)
         
@@ -1070,7 +1259,7 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
         self.containersTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(container_port))
         
         for col in range(3):
-                    item = self.podsTable.item(row_count, col)
+                    item = self.containersTable.item(row_count, col)
                     if item:
                         item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
 

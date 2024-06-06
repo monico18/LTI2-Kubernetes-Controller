@@ -1,3 +1,8 @@
 pyqt5
 matplotlib
 seaborn
+paramiko
+urllib3
+requests
+importlib
+pandas

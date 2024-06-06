@@ -1616,7 +1616,7 @@
              <enum>Qt::LeftToRight</enum>
             </property>
             <property name="currentIndex">
-             <number>2</number>
+             <number>5</number>
             </property>
             <widget class="QWidget" name="page_1">
              <property name="enabled">
@@ -6524,7 +6524,7 @@ Service</string>
                   <string>Refresh Table</string>
                  </property>
                 </widget>
-                <widget class="QPushButton" name="btn_pod_container_details_2">
+                <widget class="QPushButton" name="btn_service_port">
                  <property name="geometry">
                   <rect>
                    <x>430</x>
@@ -7765,7 +7765,7 @@ Ingress</string>
                   <string>Refresh Table</string>
                  </property>
                 </widget>
-                <widget class="QPushButton" name="btn_pod_container_details_3">
+                <widget class="QPushButton" name="btn_ingress_rules">
                  <property name="geometry">
                   <rect>
                    <x>360</x>

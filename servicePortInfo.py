@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '.\UI\ContainerInfo.ui'
+# Form implementation generated from reading ui file '.\UI\ServicePortInfo.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.10
 #
@@ -11,13 +11,13 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-class Ui_ContainerInfo(object):
-    def setupUi(self, ContainerInfo):
-        ContainerInfo.setObjectName("ContainerInfo")
-        ContainerInfo.resize(892, 630)
-        ContainerInfo.setStyleSheet("background-color: rgb(45, 45, 45);")
-        self.container_info = QtWidgets.QTextEdit(ContainerInfo)
-        self.container_info.setGeometry(QtCore.QRect(100, 40, 701, 451))
+class Ui_ServicePortInfo(object):
+    def setupUi(self, ServicePortInfo):
+        ServicePortInfo.setObjectName("ServicePortInfo")
+        ServicePortInfo.resize(892, 630)
+        ServicePortInfo.setStyleSheet("background-color: rgb(45, 45, 45);")
+        self.service_port_info = QtWidgets.QTextEdit(ServicePortInfo)
+        self.service_port_info.setGeometry(QtCore.QRect(100, 40, 701, 451))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.SolidPattern)
@@ -73,10 +73,10 @@ class Ui_ContainerInfo(object):
         brush = QtGui.QBrush(QtGui.QColor(45, 45, 45))
         brush.setStyle(QtCore.Qt.SolidPattern)
         palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Window, brush)
-        self.container_info.setPalette(palette)
-        self.container_info.setReadOnly(True)
-        self.container_info.setObjectName("container_info")
-        self.btn_exit = QtWidgets.QPushButton(ContainerInfo)
+        self.service_port_info.setPalette(palette)
+        self.service_port_info.setReadOnly(True)
+        self.service_port_info.setObjectName("service_port_info")
+        self.btn_exit = QtWidgets.QPushButton(ServicePortInfo)
         self.btn_exit.setGeometry(QtCore.QRect(390, 520, 108, 40))
         self.btn_exit.setMinimumSize(QtCore.QSize(0, 40))
         palette = QtGui.QPalette()
@@ -120,10 +120,10 @@ class Ui_ContainerInfo(object):
         self.btn_exit.setStyleSheet("")
         self.btn_exit.setObjectName("btn_exit")
 
-        self.retranslateUi(ContainerInfo)
-        QtCore.QMetaObject.connectSlotsByName(ContainerInfo)
+        self.retranslateUi(ServicePortInfo)
+        QtCore.QMetaObject.connectSlotsByName(ServicePortInfo)
 
-    def retranslateUi(self, ContainerInfo):
+    def retranslateUi(self, ServicePortInfo):
         _translate = QtCore.QCoreApplication.translate
-        ContainerInfo.setWindowTitle(_translate("ContainerInfo", "Form"))
-        self.btn_exit.setText(_translate("ContainerInfo", "Exit"))
+        ServicePortInfo.setWindowTitle(_translate("ServicePortInfo", "Form"))
+        self.btn_exit.setText(_translate("ServicePortInfo", "Exit"))

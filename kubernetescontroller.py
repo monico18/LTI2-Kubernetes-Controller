@@ -8,6 +8,8 @@ from container_info import Ui_ContainerInfo
 from deployment_config import Ui_DeploymentConfig
 from service_config import Ui_ServiceConfig
 from ingress_config import Ui_IngressConfig
+from ingressRulesInfo import Ui_IngressRulesInfo
+from servicePortInfo import Ui_ServicePortInfo
 import sys
 import json
 import os
@@ -64,7 +66,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.container_info_page = None
         self.deployment_config_page = None
         self.service_config_page = None
+        self.service_port_info_page = None
         self.ingress_config_page = None
+        self.ingress_rules_info_page = None
         
         #Namespace
         self.namespaceTable.clicked.connect(self.handle_namespacetable_item_clicked)
@@ -100,18 +104,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_refresh_services_table.clicked.connect(self.refresh_table_service)
         self.btn_add_service.clicked.connect(self.open_service_config_page)
         self.btn_delete_service.clicked.connect(self.open_service_config_page)
+        self.btn_service_port.clicked.connect(self.open_service_config_page)
         
         self.btn_update_service.setEnabled(False)
         self.btn_delete_service.setEnabled(False)
+        self.btn_service_port.setEnabled(False)
         
         #Ingress
         self.ingressTable.clicked.connect(self.handle_ingresstable_item_clicked)
         self.btn_refresh_ingress_table.clicked.connect(self.refresh_table_ingress)
         self.btn_add_ingress.clicked.connect(self.open_ingress_config_page)
         self.btn_delete_ingress.clicked.connect(self.open_ingress_config_page)
+        self.btn_ingress_rules.clicked.connect(self.open_ingress_config_page)
         
         self.btn_update_ingress.setEnabled(False)
         self.btn_delete_ingress.setEnabled(False)
+        self.btn_ingress_rules.setEnabled(False)
         
         self.refresh_table_node()
         self.refresh_table_namespaces()
@@ -160,6 +168,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.ingress_config_page = IngressPage(self.api_instance, self.ip_address, self.api_key, self.api_port)
             self.ingress_config_page.configSaved.connect(self.handleConfigSaved)
             self.ingress_config_page.show()
+        if sender == self.ingress_rules_info_page:
+            self.ingress_rules_info_page = IngressRulesInfo()
+            self.ingress_rules_info_page.fill_ingress_rules_info(self.selected_ingress)
+            self.ingress_rules_info_page.show()
     
     def open_service_config_page(self):
         sender = self.sender()  
@@ -173,7 +185,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.service_config_page = ServicePage(self.api_instance, self.ip_address, self.api_key)
             self.service_config_page.configSaved.connect(self.handleConfigSaved)
             self.service_config_page.show()
-    
+        if sender == self.btn_service_port:
+            self.service_port_info_page = ServicePortInfo()
+            self.service_port_info_page.fill_service_port_info(self.selected_service)
+            self.service_port_info_page.show()
+            
     def open_deployment_config_page(self):
         sender = self.sender()  
         if sender == self.btn_delete_deployment:           
@@ -445,6 +461,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def handle_servicetable_item_clicked(self, item):
         self.btn_update_service.setEnabled(True)
         self.btn_delete_service.setEnabled(True)
+        self.btn_service_port.setEnabled(True)
         row = item.row()
         name = self.servicesTable.item(row,0).text()
         namespace = self.servicesTable.item(row,1).text()
@@ -454,12 +471,34 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def handle_ingresstable_item_clicked(self,item):
         self.btn_update_ingress.setEnabled(True)
         self.btn_delete_ingress.setEnabled(True)
+        self.btn_ingress_rules.setEnabled(True)
         row = item.row()
         name = self.ingressTable.item(row,0).text()
         namespace = self.ingressTable.item(row,1).text()
         self.selected_ingress = api.list_selected_ingress(self.ip_address, self.api_key, name, namespace)
         self.selected_ingress = json.loads(self.selected_ingress)     
-       
+
+class IngressRulesInfo(QtWidgets.QMainWindow, Ui_IngressRulesInfo):
+    def __init__(self):
+        super(IngressRulesInfo, self).__init__()
+        self.setupUi(self)
+        self.btn_exit.clicked.connect(self.close)
+
+    def fill_ingress_rules_info(self, selected_ingress):
+        ingress_rules_text = ""
+        rules = selected_ingress.get('rules', [])
+        for rule in rules:
+            ingress_rules_text += "Host: {}\n".format(rule.get('host', ''))
+            ingress_rules_text += "Paths:\n"
+            paths = rule.get('paths', [])
+            for path in paths:
+                ingress_rules_text += "  Path: {}\n".format(path.get('path', ''))
+                ingress_rules_text += "  Service Name: {}\n".format(path.get('service_name', ''))
+                ingress_rules_text += "  Service Port: {}\n".format(path.get('service_port', ''))
+            ingress_rules_text += "\n"
+
+        self.ingress_rules_info.setPlainText(ingress_rules_text)
+ 
 class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
     configSaved = pyqtSignal()
     def __init__(self, api_instance, ip_address, api_key, api_port):
@@ -592,6 +631,25 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         msg_box.setWindowTitle("Error")
         msg_box.setText(message)
         msg_box.exec_() 
+
+class ServicePortInfo(QtWidgets.QMainWindow, Ui_ServicePortInfo):
+    def __init__(self):
+        super(ServicePortInfo, self).__init__()
+        self.setupUi(self)
+        self.btn_exit.clicked.connect(self.close)
+
+    def fill_service_port_info(self, selected_service):
+        service_port_text = ""
+        ports = selected_service.get('ports', [])
+        for port in ports:
+            service_port_text += "Name: {}\n".format(port.get('name', ''))
+            service_port_text += "Port: {}\n".format(port.get('port', ''))
+            service_port_text += "Target Port: {}\n".format(port.get('target_port', ''))
+            service_port_text += "Protocol: {}\n".format(port.get('protocol', ''))
+            service_port_text += "Node Port: {}\n".format(port.get('node_port', ''))
+            service_port_text += "\n"
+
+        self.service_port_info.setPlainText(service_port_text)
 
 class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
     configSaved = pyqtSignal()

@@ -2169,8 +2169,8 @@ class Ui_MainWindow(object):
         palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Window, brush)
         self.btn_refresh_services_table.setPalette(palette)
         self.btn_refresh_services_table.setObjectName("btn_refresh_services_table")
-        self.btn_pod_container_details_2 = QtWidgets.QPushButton(self.groupBox_6)
-        self.btn_pod_container_details_2.setGeometry(QtCore.QRect(430, 140, 131, 61))
+        self.btn_service_port = QtWidgets.QPushButton(self.groupBox_6)
+        self.btn_service_port.setGeometry(QtCore.QRect(430, 140, 131, 61))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(45, 45, 45))
         brush.setStyle(QtCore.Qt.SolidPattern)
@@ -2208,8 +2208,8 @@ class Ui_MainWindow(object):
         brush = QtGui.QBrush(QtGui.QColor(45, 45, 45))
         brush.setStyle(QtCore.Qt.SolidPattern)
         palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Window, brush)
-        self.btn_pod_container_details_2.setPalette(palette)
-        self.btn_pod_container_details_2.setObjectName("btn_pod_container_details_2")
+        self.btn_service_port.setPalette(palette)
+        self.btn_service_port.setObjectName("btn_service_port")
         self.verticalLayout_11.addWidget(self.groupBox_6)
         self.servicesTable = QtWidgets.QTableWidget(self.page_6)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
@@ -2581,8 +2581,8 @@ class Ui_MainWindow(object):
         palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Window, brush)
         self.btn_refresh_ingress_table.setPalette(palette)
         self.btn_refresh_ingress_table.setObjectName("btn_refresh_ingress_table")
-        self.btn_pod_container_details_3 = QtWidgets.QPushButton(self.groupBox_7)
-        self.btn_pod_container_details_3.setGeometry(QtCore.QRect(360, 130, 131, 61))
+        self.btn_ingress_rules = QtWidgets.QPushButton(self.groupBox_7)
+        self.btn_ingress_rules.setGeometry(QtCore.QRect(360, 130, 131, 61))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(45, 45, 45))
         brush.setStyle(QtCore.Qt.SolidPattern)
@@ -2620,8 +2620,8 @@ class Ui_MainWindow(object):
         brush = QtGui.QBrush(QtGui.QColor(45, 45, 45))
         brush.setStyle(QtCore.Qt.SolidPattern)
         palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Window, brush)
-        self.btn_pod_container_details_3.setPalette(palette)
-        self.btn_pod_container_details_3.setObjectName("btn_pod_container_details_3")
+        self.btn_ingress_rules.setPalette(palette)
+        self.btn_ingress_rules.setObjectName("btn_ingress_rules")
         self.verticalLayout_12.addWidget(self.groupBox_7)
         self.ingressTable = QtWidgets.QTableWidget(self.page_7)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
@@ -2708,7 +2708,7 @@ class Ui_MainWindow(object):
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)
-        self.stackedWidget.setCurrentIndex(2)
+        self.stackedWidget.setCurrentIndex(5)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -2788,7 +2788,7 @@ class Ui_MainWindow(object):
         self.btn_delete_service.setText(_translate("MainWindow", "Delete Selected\n"
 "Service"))
         self.btn_refresh_services_table.setText(_translate("MainWindow", "Refresh Table"))
-        self.btn_pod_container_details_2.setText(_translate("MainWindow", "View Selected Service\n"
+        self.btn_service_port.setText(_translate("MainWindow", "View Selected Service\n"
 "Port Details"))
         item = self.servicesTable.horizontalHeaderItem(0)
         item.setText(_translate("MainWindow", "Name"))
@@ -2805,7 +2805,7 @@ class Ui_MainWindow(object):
         self.btn_update_ingress.setText(_translate("MainWindow", "Update Selected\n"
 "Ingress"))
         self.btn_refresh_ingress_table.setText(_translate("MainWindow", "Refresh Table"))
-        self.btn_pod_container_details_3.setText(_translate("MainWindow", "View Selected Ingress\n"
+        self.btn_ingress_rules.setText(_translate("MainWindow", "View Selected Ingress\n"
 "Rules Details"))
         item = self.ingressTable.horizontalHeaderItem(0)
         item.setText(_translate("MainWindow", "Name"))

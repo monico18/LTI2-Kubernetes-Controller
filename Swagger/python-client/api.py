@@ -124,7 +124,7 @@ def list_pods(api_instance):
 def list_selected_pod(api_instance, name,namespace):
     try:
         api_response = api_instance.read_core_v1_namespaced_pod(name=name,namespace=namespace).to_dict()
-
+        
         filtered_response = {
                     "name": api_response["metadata"]["name"],
                     "label": api_response["metadata"]["labels"]["app"],
@@ -292,7 +292,7 @@ def list_selected_service(api_instance, name, namespace):
                     "name": api_response["metadata"]["name"],
                     "namespace": api_response['metadata']["namespace"],
                     "label": api_response["metadata"]["labels"]["app"],
-                    "num_ports": str(len(api_response["spec"]["ports"])),
+                    "ports": api_response["spec"]["ports"],
                 }
 
         return json.dumps(filtered_response, indent=4)        

@@ -5,9 +5,9 @@ from swagger_client.rest import ApiException
 from pprint import pprint
 import json
 
-def configure_api(api_key,ip_add):
+def configure_api(api_key,ip_add, api_port):
     configuration = swagger_client.Configuration()
-    configuration.host = f"https://{ip_add}:6443"
+    configuration.host = f"https://{ip_add}:{api_port}"
     configuration.verify_ssl = False
     configuration.api_key['authorization'] = api_key
     configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -158,10 +158,10 @@ def delete_pod(api_instance,name ,namespace):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_pod_for_all_namespaces: %s\n" % e)
         
-def list_deployments(ip_add, api_key):
+def list_deployments(ip_add, api_key, api_port):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -191,10 +191,10 @@ def list_deployments(ip_add, api_key):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
         
-def list_selected_deployment(ip_add, api_key, name, namespace):
+def list_selected_deployment(ip_add, api_key, api_port, name, namespace):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -214,10 +214,10 @@ def list_selected_deployment(ip_add, api_key, name, namespace):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
         
-def create_deployment(ip_add, api_key, namespace, json_contents):
+def create_deployment(ip_add, api_key, api_port, namespace, json_contents):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -229,10 +229,10 @@ def create_deployment(ip_add, api_key, namespace, json_contents):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
         
-def update_deployment(ip_add, api_key, name, namespace, json_contents):
+def update_deployment(ip_add, api_key, api_port, name, namespace, json_contents):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -245,10 +245,10 @@ def update_deployment(ip_add, api_key, name, namespace, json_contents):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
         
-def delete_deployment(ip_add, api_key, name, namespace):
+def delete_deployment(ip_add, api_key, api_port, name, namespace):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -321,10 +321,10 @@ def delete_service(api_instance, name, namespace):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
 
-def list_ingress(ip_add, api_key):
+def list_ingress(ip_add, api_key, api_port):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -349,10 +349,10 @@ def list_ingress(ip_add, api_key):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
         
-def list_selected_ingress(ip_add, api_key, name, namespace):   
+def list_selected_ingress(ip_add, api_key, api_port, name, namespace):   
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -372,10 +372,10 @@ def list_selected_ingress(ip_add, api_key, name, namespace):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)   
 
-def create_ingress(ip_add, api_key, namespace, json_contents):
+def create_ingress(ip_add, api_key, api_port,  namespace, json_contents):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -388,10 +388,10 @@ def create_ingress(ip_add, api_key, namespace, json_contents):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
         
-def patch_ingress(ip_add, api_key, name, namespace, json_contents):
+def patch_ingress(ip_add, api_key, api_port, name, namespace, json_contents):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'
@@ -404,10 +404,10 @@ def patch_ingress(ip_add, api_key, name, namespace, json_contents):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
         
-def delete_ingress(ip_add, api_key, name, namespace):
+def delete_ingress(ip_add, api_key, api_port, name, namespace):
     try:
         configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:6443"
+        configuration.host = f"https://{ip_add}:{api_port}"
         configuration.verify_ssl = False
         configuration.api_key['authorization'] = api_key
         configuration.api_key_prefix['authorization'] = 'Bearer'

@@ -32,7 +32,7 @@ spec.loader.exec_module(api)
 
 
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
-    def __init__(self,ip_add, api_key):
+    def __init__(self,ip_add, api_key, api_port):
         super(MainWindow, self).__init__()
         self.setupUi(self)
 
@@ -40,7 +40,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #Auth
         self.ip_address = ip_add
         self.api_key = api_key
-        self.api_instance = api.configure_api(self.api_key, self.ip_address)
+        self.api_port = api_port
+        self.api_instance = api.configure_api(self.api_key, self.ip_address, self.api_port)
         
         #Selecteds
         self.selected_pod = None
@@ -150,13 +151,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def open_ingress_config_page(self):
         sender = self.sender()
         if sender == self.btn_delete_ingress:
-            api.delete_ingress(self.ip_address, self.api_key, self.selected_ingress["name"], self.selected_ingress["namespace"] )
+            api.delete_ingress(self.ip_address, self.api_key, self.api_port, self.selected_ingress["name"], self.selected_ingress["namespace"] )
             time.sleep(3)
             self.refresh_table_ingress()
             self.btn_update_ingress.setEnabled(False)
             self.btn_delete_ingress.setEnabled(False)
         if sender == self.btn_add_ingress:
-            self.ingress_config_page = IngressPage(self.api_instance, self.ip_address, self.api_key)
+            self.ingress_config_page = IngressPage(self.api_instance, self.ip_address, self.api_key, self.api_port)
             self.ingress_config_page.configSaved.connect(self.handleConfigSaved)
             self.ingress_config_page.show()
     
@@ -177,13 +178,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         sender = self.sender()  
         if sender == self.btn_delete_deployment:           
             if self.selected_deployment:
-                api.delete_deployment(self.ip_address, self.api_key, self.selected_deployment["name"], self.selected_deployment["namespace"])
+                api.delete_deployment(self.ip_address, self.api_key, self.api_port, self.selected_deployment["name"], self.selected_deployment["namespace"])
                 time.sleep(3)
                 self.refresh_table_deployments()
                 self.btn_update_deployment.setEnabled(False)
                 self.btn_delete_deployment.setEnabled(False)
         elif sender == self.btn_add_deployment:
-            self.deployment_config_page = DeploymentPage(self.api_instance, self.ip_address, self.api_key)
+            self.deployment_config_page = DeploymentPage(self.api_instance, self.ip_address, self.api_key, self.api_port)
             self.deployment_config_page.configSaved.connect(self.handleConfigSaved)
             self.deployment_config_page.show()
     
@@ -324,7 +325,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
    
     def refresh_table_deployments(self):
         try:
-            response= api.list_deployments(self.ip_address, self.api_key)
+            response= api.list_deployments(self.ip_address, self.api_key, self.api_port)
             deploys_data = json.loads(response)
             self.deploymentTable.setRowCount(0) 
             for row ,deploy in enumerate(deploys_data["deploys"]):
@@ -387,7 +388,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             
     def refresh_table_ingress(self):
         try:
-            response = api.list_ingress(self.ip_address, self.api_key)
+            response = api.list_ingress(self.ip_address, self.api_key, self.api_port)
             ingress_data = json.loads(response)
             self.ingressTable.setRowCount(0) 
             for row ,ingress in enumerate(ingress_data["ingresses"]):
@@ -457,17 +458,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         name = self.ingressTable.item(row,0).text()
         namespace = self.ingressTable.item(row,1).text()
         self.selected_ingress = api.list_selected_ingress(self.ip_address, self.api_key, name, namespace)
-        self.selected_ingress = json.loads(self.selected_ingress)
-       
+        self.selected_ingress = json.loads(self.selected_ingress)     
        
 class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
     configSaved = pyqtSignal()
-    def __init__(self, api_instance, ip_address, api_key):
+    def __init__(self, api_instance, ip_address, api_key, api_port):
         super(IngressPage, self).__init__()
         self.setupUi(self)
         self.api_instance = api_instance
         self.ip_address = ip_address
         self.api_key = api_key
+        self.api_port = api_port
         
         self.rules = []
 
@@ -575,7 +576,7 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
             }
         }
 
-        api.create_ingress(self.ip_address, self.api_key, namespace, params)
+        api.create_ingress(self.ip_address, self.api_key, self.api_port, namespace, params)
         self.configSaved.emit()
         self.close()
 
@@ -733,12 +734,13 @@ class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
 
 class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
     configSaved = pyqtSignal()
-    def __init__(self, api_instance, ip_address, api_key):
+    def __init__(self, api_instance, ip_address, api_key, api_port):
         super(DeploymentPage, self).__init__()
         self.setupUi(self)
         self.api_instance = api_instance
         self.ip_address = ip_address
         self.api_key = api_key
+        self.api_port = api_port
         
         response = api.list_namespaces(self.api_instance)
         namespace_data = json.loads(response)
@@ -878,7 +880,7 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
             }
         }
 
-        api.create_deployment(self.ip_address,self.api_key, namespace, params)
+        api.create_deployment(self.ip_address,self.api_key, self.api_port, namespace, params)
 
         self.configSaved.emit()
         self.close()
@@ -1057,6 +1059,8 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
         self.ip_add.setText("10.0.4.149")
         self.username.setText("ubuntu")
         self.password.setText("ubuntu")
+        self.ssh_port.setText("22")
+        self.api_port.setText("6443")
 
     def set_stacked_widget(self, stacked_widget):
         self.stacked_widget = stacked_widget
@@ -1065,12 +1069,14 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
         ip_add = self.ip_add.text()
         username = self.username.text()
         password = self.password.text()
+        ssh_port = self.ssh_port.text()
+        api_port = self.api_port.text()
 
         if ip_add == "10.0.4.149":
 
             ssh_client = paramiko.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh_client.connect(ip_add, username= username, password= password)
+            ssh_client.connect(ip_add, username= username, password= password, port=ssh_port)
 
             command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"  
             stdin, stdout, stderr = ssh_client.exec_command(command)
@@ -1079,7 +1085,7 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
             output = stdout.read().decode()
 
             self.hide()
-            self.main_window = MainWindow(ip_add , output)
+            self.main_window = MainWindow(ip_add , output, api_port)
             self.main_window.showMaximized()
         else:
             msg_box = QtWidgets.QMessageBox()

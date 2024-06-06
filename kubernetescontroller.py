@@ -21,6 +21,9 @@ import requests
 import urllib3
 import time
 import importlib.util
+import seaborn as sns
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 api_directory = os.path.join(os.path.dirname(__file__), 'Swagger', 'python-client')
 sys.path.append(api_directory)
@@ -37,7 +40,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self,ip_add, api_key, api_port):
         super(MainWindow, self).__init__()
         self.setupUi(self)
-
 
         #Auth
         self.ip_address = ip_add
@@ -60,6 +62,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_page_5.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_5))
         self.btn_page_6.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_6))
         self.btn_page_7.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_7))
+
+        #Dashboard
+        self.dashboard_layout = QtWidgets.QVBoxLayout(self.groupBox)
+        self.plot_dashboard()
+        
 
         #Pages
         self.pod_config_page = None
@@ -128,6 +135,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.refresh_table_service()
         self.refresh_table_ingress()
     
+    def plot_dashboard(self):
+        # Create a Seaborn plot
+        fig, ax = plt.subplots()
+        sns.set(style="whitegrid")
+        tips = sns.load_dataset("tips")
+        sns.barplot(x="day", y="total_bill", data=tips, ax=ax)
+        ax.set_title('Seaborn Plot')
+
+        # Create a Canvas to embed the plot
+        canvas = FigureCanvas(fig)
+        self.dashboard_layout.addWidget(canvas)
+        
     def rem_namespace(self):
         api.delete_namespace(self.api_instance, self.selected_namespace["name"])
         time.sleep(3)

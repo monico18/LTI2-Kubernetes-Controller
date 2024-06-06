@@ -13,7 +13,8 @@ def configure_api(api_key,ip_add, api_port):
     configuration.api_key_prefix['authorization'] = 'Bearer'
 
     api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
-       
+    
+    
     return api_instance
 
 def list_nodes(api_instance):
@@ -135,6 +136,33 @@ def list_selected_pod(api_instance, name,namespace):
         return json.dumps(filtered_response, indent=4)
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_pod_for_all_namespaces: %s\n" % e)       
+    
+def nodes_info(ip_add, api_key, api_port):
+    try:
+        configuration = swagger_client.Configuration()
+        configuration.host = f"https://{ip_add}:{api_port}"
+        configuration.verify_ssl = False
+        configuration.api_key['authorization'] = api_key
+        configuration.api_key_prefix['authorization'] = 'Bearer'
+
+        api_instance = swagger_client.MetricsV1beta1Api(swagger_client.ApiClient(configuration))
+        
+        api_response = api_instance.list_metrics_v1beta1_node_metrics().to_dict()
+
+        filtered_response ={
+            "nodes_info": [
+                {
+                    "name": node_info["metadata"]["name"],
+                    "cpu_usage": node_info["usage"]["cpu"],
+                    "memory_usage": node_info["usage"]["memory"]
+               }
+                for node_info in api_response.get("items", [])
+            ]
+        }
+
+        return json.dumps(filtered_response, indent=4)
+    except ApiException as e:
+        print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
     
 def create_pod(api_instance,namespace, json_content):
     try:        

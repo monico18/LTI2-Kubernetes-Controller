@@ -14,7 +14,6 @@ def configure_api(api_key,ip_add, api_port):
 
     api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
     
-    
     return api_instance
 
 def list_nodes(api_instance):

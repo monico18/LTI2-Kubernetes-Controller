@@ -27,6 +27,14 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+import librosa
+import numpy as np
+from python_speech_features import mfcc
+from sklearn.svm import SVC
+import joblib
+import pyaudio
+import wave
+
 
 api_directory = os.path.join(os.path.dirname(__file__), 'Swagger', 'python-client')
 sys.path.append(api_directory)
@@ -44,16 +52,26 @@ class SpeechRecognitionThread(QThread):
 
     def run(self):
         recognizer = sr.Recognizer()
-        try:
-            with sr.Microphone() as source:
-                recognizer.adjust_for_ambient_noise(source, duration=0.2)
-                audio = recognizer.listen(source)
-                text = recognizer.recognize_google(audio)
-                self.recognized.emit(text.lower())
-        except sr.RequestError as e:
-            self.error.emit(f"Could not request results; {e}")
-        except sr.UnknownValueError:
-            self.error.emit("Unknown error occurred")
+        retry_count = 3 
+        for attempt in range(retry_count):
+            try:
+                with sr.Microphone() as source:
+                    recognizer.adjust_for_ambient_noise(source, duration=0.2)
+                    audio = recognizer.listen(source)
+                    text = recognizer.recognize_google(audio)
+                    self.recognized.emit(text.lower())
+                    return
+            except sr.RequestError as e:
+                self.error.emit(f"Could not request results; {e}")
+                return
+            except sr.UnknownValueError:
+                self.error.emit("Google Speech Recognition could not understand audio")
+                return
+            except Exception as e:
+                self.error.emit(f"Attempt {attempt+1}/{retry_count} failed: {e}")
+                time.sleep(2)  # Wait before retrying
+
+        self.error.emit("All attempts to recognize speech have failed.")
 
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self,ip_add, api_key, api_port):
@@ -176,13 +194,38 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def handle_recognition_result(self, text):
         print("Did you say: ", text)
         self.listening_dialog.setText(f"Did you say: {text}?")
-        QTimer.singleShot(2000, self.listening_dialog.hide)
+        QTimer.singleShot(1000, self.listening_dialog.hide)
         self.speak_text(text)
+        
+        if "dashboard" in text:
+            self.stackedWidget.setCurrentWidget(self.page_1)
+        elif "nodes" in text:
+            self.stackedWidget.setCurrentWidget(self.page_2)
+        elif "namespaces" in text or "name spaces" in text:
+            self.stackedWidget.setCurrentWidget(self.page_3)
+        elif "pods" in text or "pause" in text:
+            self.stackedWidget.setCurrentWidget(self.page_4)
+        elif "create pause" in text or "create pods" in text or "create the pause" in text or "create the pods" in text:
+            self.btn_add_pod.click()
+        elif "deployments" in text:
+            self.stackedWidget.setCurrentWidget(self.page_5)
+        elif "create deployment" in text or "create the deployment" in text:
+            self.btn_add_deployment.click()
+        elif "services" in text:
+            self.stackedWidget.setCurrentWidget(self.page_6)
+        elif "create service" in text or "create the service" in text:
+            self.btn_add_service.click()
+        elif "ingresses" in text:
+            self.stackedWidget.setCurrentWidget(self.page_7)
+        elif "create ingress" in text or "create the ingress" in text:
+            self.btn_add_ingress.click()
+        elif "wizard" in text:
+            self.stackedWidget.setCurrentWidget(self.page_8)
 
     def handle_recognition_error(self, error_message):
         print(error_message)
         self.listening_dialog.setText(f"Error: {error_message}")
-        QTimer.singleShot(2000, self.listening_dialog.hide)
+        QTimer.singleShot(1000, self.listening_dialog.hide)
 
     def speak_text(self, command):
         engine = pyttsx3.init()
@@ -1383,8 +1426,8 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
         api.create_pod(self.api_instance, namespace,params)
 
         self.configSaved.emit()
-        self.close()
-        
+        self.close() 
+
 class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
     def __init__(self):
         super(LoginPage, self).__init__()
@@ -1402,33 +1445,104 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
     def set_stacked_widget(self, stacked_widget):
         self.stacked_widget = stacked_widget
 
+
     def login(self):
         ip_add = self.ip_add.text()
         username = self.username.text()
         password = self.password.text()
         ssh_port = self.ssh_port.text()
         api_port = self.api_port.text()
+        
+        if self.ip_add.text() == "10.0.4.149":
+            self.authenticate_voice()
+        else:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Invalid Username")
+            msg_box.exec_()
+            return
 
-        if ip_add == "10.0.4.149":
+    def authenticate_voice(self):
+        model = joblib.load('voice_auth_model.pkl')
+
+        sample_rate = 16000
+        duration = 3  
+        audio_data = self.record_audio(sample_rate, duration)
+
+        mfcc_features = mfcc(audio_data, sample_rate)
+
+        flattened_features = mfcc_features.flatten()
+
+        expected_features = 2600  
+        if len(flattened_features) < expected_features:
+            pad_width = expected_features - len(flattened_features)
+            flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
+        else:
+            flattened_features = flattened_features[:expected_features]
+
+        features = flattened_features.reshape(1, -1)
+
+        prediction_proba = model.predict_proba(features)
+        probability_of_authorized = prediction_proba[0][1]  
+
+        print(prediction_proba)
+        print(probability_of_authorized)
+
+        threshold = 0.7
+
+        
+        if probability_of_authorized >= threshold:
+            self.handle_voice_auth_result(True)
+        else:
+            self.handle_voice_auth_result(False)
+
+    def record_audio(self, sample_rate, duration):
+        chunk_size = 1024
+        audio_format = pyaudio.paFloat32
+        channels = 1
+
+        audio = pyaudio.PyAudio()
+        stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
+
+        frames = []
+        for _ in range(0, int(sample_rate / chunk_size * duration)):
+            data = stream.read(chunk_size)
+            frames.append(np.frombuffer(data, dtype=np.float32))
+
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
+
+        audio_data = np.hstack(frames)
+        return audio_data
+        
+    def handle_voice_auth_result(self, authenticated):
+        if authenticated:
+            ip_add = self.ip_add.text()
+            username = self.username.text()
+            password = self.password.text()
+            ssh_port = self.ssh_port.text()
+            api_port = self.api_port.text()
 
             ssh_client = paramiko.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh_client.connect(ip_add, username= username, password= password, port=ssh_port)
+            ssh_client.connect(ip_add, username=username, password=password, port=ssh_port)
 
-            command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"  
+            command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"
             stdin, stdout, stderr = ssh_client.exec_command(command)
             stdin.write(password + '\n')
             stdin.flush()
             output = stdout.read().decode()
 
             self.hide()
-            self.main_window = MainWindow(ip_add , output, api_port)
+            self.main_window = MainWindow(ip_add, output, api_port)
             self.main_window.showMaximized()
         else:
             msg_box = QtWidgets.QMessageBox()
             msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-            msg_box.setWindowTitle("Error")
-            msg_box.setText("Invalid Username")
+            msg_box.setWindowTitle("Authentication Error")
+            msg_box.setText("Voice authentication failed. Please try again.")
             msg_box.exec_()
             return
 

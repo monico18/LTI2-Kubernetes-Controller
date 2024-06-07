@@ -9,3 +9,9 @@ pandas
 SpeechRecognition
 pyaudio
 pyttsx3
+librosa
+scipy
+numpy
+python_speech_features
+keras
+tensorflow

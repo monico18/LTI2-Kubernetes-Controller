@@ -101,10 +101,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_page_7.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_7))
 
         #Dashboard
-        # self.dashboard_node_layout = QtWidgets.QHBoxLayout(self.groupBox)
-        # self.dashboard_pod_layout = QtWidgets.QHBoxLayout(self.groupBox_Pod)
+        self.dashboard_node_layout = QtWidgets.QHBoxLayout(self.groupBox)
+        self.dashboard_pod_layout = QtWidgets.QHBoxLayout(self.groupBox_Pod)
         
-        # self.plot_dashboard()
+        self.plot_dashboard()
+        
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self.plot_dashboard)
+        self.update_timer.start(30000)
         
 
         #Pages
@@ -258,13 +262,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 cpu_usages.append(int(cpu_usage_str.strip('u')) / 1e6) 
 
         # Set the background color
-        background_color = (45 / 255, 45 / 255, 45 / 255)  # RGB(45, 45, 45) in normalized form
+        background_color = (45 / 255, 45 / 255, 45 / 255) 
         plt.rcParams['figure.facecolor'] = background_color
 
         # Create CPU Usage Bar Chart
         fig_cpu, ax_cpu = plt.subplots(figsize=(5, 3))  # Smaller figure size
         ax_cpu.set_facecolor(background_color)
-        sns.barplot(x=names, y=cpu_usages, ax=ax_cpu, palette="light:#d3d3d3")
+        sns.barplot(x=names, y=cpu_usages, ax=ax_cpu, color="lightgray")
         ax_cpu.set_title('Current CPU Usage per Node', color='white')
         ax_cpu.set_xlabel('Node', color='white')
         ax_cpu.set_ylabel('CPU Usage (Cores)', color='white')
@@ -291,7 +295,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Create Memory Usage Bar Chart
         fig_memory, ax_memory = plt.subplots(figsize=(5, 3))  # Smaller figure size
         ax_memory.set_facecolor(background_color)
-        sns.barplot(x=names, y=memory_usages, ax=ax_memory, palette="light:#d3d3d3")
+        sns.barplot(x=names, y=memory_usages, ax=ax_memory, color="lightgray")
         ax_memory.set_title('Current Memory Usage per Node', color='white')
         ax_memory.set_xlabel('Node', color='white')
         ax_memory.set_ylabel('Memory Usage (Mi)', color='white')
@@ -331,19 +335,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "CPU Usage (Cores)": cpu_usages
         })
 
-        # Define a color palette
-        palette = sns.color_palette("pastel")
-
         # Create the catplot for CPU usage
         g = sns.catplot(
             data=data,
             x="Pod",
-            y="CPU Usage (Cores)",
+            y="CPU Usage (Cores)",            
             hue="Container",
             kind="bar",
             height=3,
-            aspect=3,
-            palette=palette
+            aspect=3
         )
 
         # Set plot titles and labels
@@ -389,8 +389,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "Memory Usage (Mi)": memory_usages
         })
 
-        # Define a color palette
-        palette = sns.color_palette("pastel")
 
         # Create the catplot for memory usage
         g = sns.catplot(
@@ -400,9 +398,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             hue="Container",
             kind="bar",
             height=3,
-            aspect=2,
-            palette=palette
-        )
+            aspect=2
+            )
 
         # Set plot titles and labels
         g.fig.suptitle('Memory Usage by Pod and Container', color='white')
@@ -1454,76 +1451,7 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
         api_port = self.api_port.text()
         
         if self.ip_add.text() == "10.0.4.149":
-            self.authenticate_voice()
-        else:
-            msg_box = QtWidgets.QMessageBox()
-            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-            msg_box.setWindowTitle("Error")
-            msg_box.setText("Invalid Username")
-            msg_box.exec_()
-            return
-
-    def authenticate_voice(self):
-        model = joblib.load('voice_auth_model.pkl')
-
-        sample_rate = 16000
-        duration = 3  
-        audio_data = self.record_audio(sample_rate, duration)
-
-        mfcc_features = mfcc(audio_data, sample_rate)
-
-        flattened_features = mfcc_features.flatten()
-
-        expected_features = 2600  
-        if len(flattened_features) < expected_features:
-            pad_width = expected_features - len(flattened_features)
-            flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
-        else:
-            flattened_features = flattened_features[:expected_features]
-
-        features = flattened_features.reshape(1, -1)
-
-        prediction_proba = model.predict_proba(features)
-        probability_of_authorized = prediction_proba[0][1]  
-
-        print(prediction_proba)
-        print(probability_of_authorized)
-
-        threshold = 0.7
-
-        
-        if probability_of_authorized >= threshold:
-            self.handle_voice_auth_result(True)
-        else:
-            self.handle_voice_auth_result(False)
-
-    def record_audio(self, sample_rate, duration):
-        chunk_size = 1024
-        audio_format = pyaudio.paFloat32
-        channels = 1
-
-        audio = pyaudio.PyAudio()
-        stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
-
-        frames = []
-        for _ in range(0, int(sample_rate / chunk_size * duration)):
-            data = stream.read(chunk_size)
-            frames.append(np.frombuffer(data, dtype=np.float32))
-
-        stream.stop_stream()
-        stream.close()
-        audio.terminate()
-
-        audio_data = np.hstack(frames)
-        return audio_data
-        
-    def handle_voice_auth_result(self, authenticated):
-        if authenticated:
-            ip_add = self.ip_add.text()
-            username = self.username.text()
-            password = self.password.text()
-            ssh_port = self.ssh_port.text()
-            api_port = self.api_port.text()
+            # self.authenticate_voice()
 
             ssh_client = paramiko.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -1538,13 +1466,103 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
             self.hide()
             self.main_window = MainWindow(ip_add, output, api_port)
             self.main_window.showMaximized()
+        # else:
+        #     msg_box = QtWidgets.QMessageBox()
+        #     msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+        #     msg_box.setWindowTitle("Authentication Error")
+        #     msg_box.setText("Voice authentication failed. Please try again.")
+        #     msg_box.exec_()
+        #     return
         else:
             msg_box = QtWidgets.QMessageBox()
             msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-            msg_box.setWindowTitle("Authentication Error")
-            msg_box.setText("Voice authentication failed. Please try again.")
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Invalid Username")
             msg_box.exec_()
             return
+
+    # def authenticate_voice(self):
+    #     model = joblib.load('voice_auth_model.pkl')
+
+    #     sample_rate = 16000
+    #     duration = 3  
+    #     audio_data = self.record_audio(sample_rate, duration)
+
+    #     mfcc_features = mfcc(audio_data, sample_rate)
+
+    #     flattened_features = mfcc_features.flatten()
+
+    #     expected_features = 2600  
+    #     if len(flattened_features) < expected_features:
+    #         pad_width = expected_features - len(flattened_features)
+    #         flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
+    #     else:
+    #         flattened_features = flattened_features[:expected_features]
+
+    #     features = flattened_features.reshape(1, -1)
+
+    #     prediction_proba = model.predict_proba(features)
+    #     probability_of_authorized = prediction_proba[0][1]  
+
+    #     print(prediction_proba)
+    #     print(probability_of_authorized)
+
+    #     threshold = 0.7
+
+        
+    #     if probability_of_authorized >= threshold:
+    #         self.handle_voice_auth_result(True)
+    #     else:
+    #         self.handle_voice_auth_result(False)
+
+    # def record_audio(self, sample_rate, duration):
+    #     chunk_size = 1024
+    #     audio_format = pyaudio.paFloat32
+    #     channels = 1
+
+    #     audio = pyaudio.PyAudio()
+    #     stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
+
+    #     frames = []
+    #     for _ in range(0, int(sample_rate / chunk_size * duration)):
+    #         data = stream.read(chunk_size)
+    #         frames.append(np.frombuffer(data, dtype=np.float32))
+
+    #     stream.stop_stream()
+    #     stream.close()
+    #     audio.terminate()
+
+    #     audio_data = np.hstack(frames)
+    #     return audio_data
+        
+    # def handle_voice_auth_result(self, authenticated):
+    #     if authenticated:
+    #         ip_add = self.ip_add.text()
+    #         username = self.username.text()
+    #         password = self.password.text()
+    #         ssh_port = self.ssh_port.text()
+    #         api_port = self.api_port.text()
+
+    #         ssh_client = paramiko.SSHClient()
+    #         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    #         ssh_client.connect(ip_add, username=username, password=password, port=ssh_port)
+
+    #         command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"
+    #         stdin, stdout, stderr = ssh_client.exec_command(command)
+    #         stdin.write(password + '\n')
+    #         stdin.flush()
+    #         output = stdout.read().decode()
+
+    #         self.hide()
+    #         self.main_window = MainWindow(ip_add, output, api_port)
+    #         self.main_window.showMaximized()
+    #     else:
+    #         msg_box = QtWidgets.QMessageBox()
+    #         msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+    #         msg_box.setWindowTitle("Authentication Error")
+    #         msg_box.setText("Voice authentication failed. Please try again.")
+    #         msg_box.exec_()
+            # return
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)

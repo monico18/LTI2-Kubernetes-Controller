@@ -1,5 +1,5 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtCore import pyqtSignal, Qt ,QThread, QTimer
 from PyQt5.QtGui import QDesktopServices
 from ui_main import Ui_MainWindow
 from login import Ui_LoginPage
@@ -21,6 +21,8 @@ import requests
 import urllib3
 import time
 import importlib.util
+import speech_recognition as sr
+import pyttsx3
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -36,6 +38,22 @@ api = importlib.util.module_from_spec(spec)
 
 spec.loader.exec_module(api)
 
+class SpeechRecognitionThread(QThread):
+    recognized = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def run(self):
+        recognizer = sr.Recognizer()
+        try:
+            with sr.Microphone() as source:
+                recognizer.adjust_for_ambient_noise(source, duration=0.2)
+                audio = recognizer.listen(source)
+                text = recognizer.recognize_google(audio)
+                self.recognized.emit(text.lower())
+        except sr.RequestError as e:
+            self.error.emit(f"Could not request results; {e}")
+        except sr.UnknownValueError:
+            self.error.emit("Unknown error occurred")
 
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self,ip_add, api_key, api_port):
@@ -65,10 +83,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_page_7.clicked.connect(lambda: self.stackedWidget.setCurrentWidget(self.page_7))
 
         #Dashboard
-        self.dashboard_node_layout = QtWidgets.QHBoxLayout(self.groupBox)
-        self.dashboard_pod_layout = QtWidgets.QHBoxLayout(self.groupBox_Pod)
+        # self.dashboard_node_layout = QtWidgets.QHBoxLayout(self.groupBox)
+        # self.dashboard_pod_layout = QtWidgets.QHBoxLayout(self.groupBox_Pod)
         
-        self.plot_dashboard()
+        # self.plot_dashboard()
         
 
         #Pages
@@ -137,6 +155,39 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.refresh_table_deployments()
         self.refresh_table_service()
         self.refresh_table_ingress()
+        
+        self.btn_hear_me.clicked.connect(self.recognize_speech)
+
+    def recognize_speech(self):
+        self.listening_dialog = QtWidgets.QMessageBox(self)
+        self.listening_dialog.setWindowTitle("Listening")
+        self.listening_dialog.setText("The system is now listening. Please speak.")
+        self.listening_dialog.setStandardButtons(QtWidgets.QMessageBox.NoButton)
+        
+        self.listening_dialog.setStyleSheet("background-color: white; color: black;")
+        self.listening_dialog.show()
+
+        self.speech_thread = SpeechRecognitionThread()
+        self.speech_thread.recognized.connect(self.handle_recognition_result)
+        self.speech_thread.error.connect(self.handle_recognition_error)
+        self.speech_thread.finished.connect(self.listening_dialog.close)
+        self.speech_thread.start()
+
+    def handle_recognition_result(self, text):
+        print("Did you say: ", text)
+        self.listening_dialog.setText(f"Did you say: {text}?")
+        QTimer.singleShot(2000, self.listening_dialog.hide)
+        self.speak_text(text)
+
+    def handle_recognition_error(self, error_message):
+        print(error_message)
+        self.listening_dialog.setText(f"Error: {error_message}")
+        QTimer.singleShot(2000, self.listening_dialog.hide)
+
+    def speak_text(self, command):
+        engine = pyttsx3.init()
+        engine.say(command)
+        engine.runAndWait()
     
     def plot_dashboard(self):
         # Clear previous widgets
@@ -704,7 +755,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         namespace = self.ingressTable.item(row,1).text()
         self.selected_ingress = api.list_selected_ingress(self.ip_address, self.api_key, name, namespace)
         self.selected_ingress = json.loads(self.selected_ingress)     
-
+            
 class IngressRulesInfo(QtWidgets.QMainWindow, Ui_IngressRulesInfo):
     def __init__(self):
         super(IngressRulesInfo, self).__init__()

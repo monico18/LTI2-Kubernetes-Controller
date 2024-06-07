@@ -6,3 +6,6 @@ urllib3
 requests
 importlib
 pandas
+SpeechRecognition
+pyaudio
+pyttsx3

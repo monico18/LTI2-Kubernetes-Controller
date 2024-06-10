@@ -133,6 +133,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.podsTable.clicked.connect(self.handle_podtable_item_clicked)
         self.btn_refresh_pod_table.clicked.connect(self.refresh_table_pods)
         self.btn_add_pod.clicked.connect(self.open_pod_config_page)
+        self.btn_update_pod.clicked.connect(self.open_pod_config_page)
         self.btn_delete_pod.clicked.connect(self.open_pod_config_page)
         self.btn_pod_container_details.clicked.connect(self.open_pod_config_page)
         
@@ -321,7 +322,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         for pod in pods_cpu_info["pods_info"]:
             pod_name = pod["name"]
             for container in pod["container_info"]:
-                cpu_usage = int(container["usage"]["cpu"].strip('n')) / 1e9  # Convert from nanocores to cores
+                cpu_usage_str = container["usage"]["cpu"]
+                cpu_usage_str = container["usage"]["cpu"]
+                if 'n' in cpu_usage_str:
+                    cpu_usage = int(cpu_usage_str.strip('n')) / 1e9  # Convert from nanocores to cores
+                elif 'u' in cpu_usage_str:
+                    cpu_usage = int(cpu_usage_str.strip('u')) / 1e6  # Convert from microcores to cores
+                else:
+                    cpu_usage = 0
                 if cpu_usage > 0:
                     pod_names.append(pod_name)
                     container_names.append(container["name"])
@@ -516,22 +524,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         sender = self.sender()  
            
         if sender == self.btn_delete_pod:           
-            print(self.selected_pod)
             api.delete_pod(self.api_instance, self.selected_pod["name"], self.selected_pod["namespace"])
             time.sleep(3)
             self.refresh_table_pods()
             self.btn_update_pod.setEnabled(False)
             self.btn_delete_pod.setEnabled(False)
-        # if sender == self.btn_update_dhcp: 
-        #     if self.selected_node is None:
-        #         QtWidgets.QMessageBox.critical(self, "Error", "No node selected.")
-        #         return
-        #     if self.selected_dhcp is not None:
-        #         if not self.dhcp_config_page:
-        #             self.dhcp_config_page = DhcpPage(self.ip_address, self.username, self.password)
-        #             self.dhcp_config_page.configSaved.connect(self.handleConfigSaved)
-        #         self.dhcp_config_page.populate_dhcp_data(self.selected_dhcp)
-        #         self.dhcp_config_page.show()
+        if sender == self.btn_update_pod: 
+            if self.selected_pod is not None:
+                if not self.pod_config_page:
+                    self.pod_config_page = PodPage(self.api_instance)
+                    self.pod_config_page.configSaved.connect(self.handleConfigSaved)
+                self.pod_config_page.populate_pod_data(self.selected_pod)
+                self.pod_config_page.show()
+                self.btn_update_pod.setEnabled(False)
+                self.btn_delete_pod.setEnabled(False)
         if sender == self.btn_add_pod:
             self.pod_config_page = PodPage(self.api_instance)
             self.pod_config_page.configSaved.connect(self.handleConfigSaved)
@@ -1288,6 +1294,9 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
         super(PodPage,self).__init__()
         self.setupUi(self)
         self.api_instance = api_instance
+        self.selected_pod = None
+        self.name = None
+        self.namespace = None
 
         response= api.list_namespaces(self.api_instance)
         namespace_data = json.loads(response)
@@ -1310,6 +1319,38 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
         for col in range(2):
                     self.containersTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
     
+    def populate_pod_data(self, selected_pod):
+        self.selected_pod = selected_pod
+        namespace_index = self.namespaces.findText(selected_pod["namespace"])
+        if namespace_index != -1:
+            self.namespace = selected_pod["namespace"]
+            self.namespaces.setCurrentIndex(namespace_index)
+            self.namespaces.setEnabled(False)
+
+        self.line_name.setText(selected_pod["name"])
+        self.line_name.setEnabled(False)
+        self.name = selected_pod["name"]
+        
+        label = selected_pod["label"]
+        self.line_label.setText(label)
+        self.line_label.setEnabled(False)
+
+        self.containersTable.setRowCount(0) 
+        for container in selected_pod["containers"]:
+            row_count = self.containersTable.rowCount()
+            self.containersTable.insertRow(row_count)
+
+            image_name = container["name"]
+            container_port = str(container["ports"][0]["container_port"])
+
+            self.containersTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(image_name))
+            self.containersTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(container_port))
+
+            for col in range(2):
+                item = self.containersTable.item(row_count, col)
+                if item:
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)   
+
     def refresh_container_table(self):
         try:
             self.containersTable.setRowCount(0)
@@ -1362,6 +1403,16 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
         for item in selected_items:
             self.containersTable.removeRow(item.row())
     
+    def construct_patch_operation(self, containers):
+        patch_operation = [
+            {
+                "op": "replace",
+                "path": "/spec/containers",
+                "value": containers
+            }
+        ]
+        return patch_operation
+    
     def save_configuration(self):
         name = self.line_name.text().lower()
         label = self.line_label.text().lower()
@@ -1404,23 +1455,28 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
             msg_box.setText("Please add at least one container")
             msg_box.exec_()
             return
-                
-        params = {
-            "apiVersion": "v1",
-            "kind": "Pod",
-            "metadata": {
-                "name": name,
-                "namespace": namespace,
-                "labels": {
-                    "app": label
-                }
-            },
-            "spec": {
-                "containers": containers
-            }
-        }
 
-        api.create_pod(self.api_instance, namespace,params)
+        if self.selected_pod != None:
+            patch_operation = self.construct_patch_operation(containers)
+            print(patch_operation)
+            api.update_pod(self.api_instance, self.name, self.namespace, patch_operation)
+        else:
+            params = {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "metadata": {
+                    "name": name,
+                    "namespace": namespace,
+                    "labels": {
+                        "app": label
+                    }
+                },
+                "spec": {
+                    "containers": containers
+                }
+            }
+                    
+            api.create_pod(self.api_instance, namespace,params)
 
         self.configSaved.emit()
         self.close() 
@@ -1442,7 +1498,6 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
     def set_stacked_widget(self, stacked_widget):
         self.stacked_widget = stacked_widget
 
-
     def login(self):
         ip_add = self.ip_add.text()
         username = self.username.text()
@@ -1451,7 +1506,97 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
         api_port = self.api_port.text()
         
         if self.ip_add.text() == "10.0.4.149":
-            # self.authenticate_voice()
+            self.authenticate_voice()
+
+            # ssh_client = paramiko.SSHClient()
+            # ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            # ssh_client.connect(ip_add, username=username, password=password, port=ssh_port)
+
+            # command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"
+            # stdin, stdout, stderr = ssh_client.exec_command(command)
+            # stdin.write(password + '\n')
+            # stdin.flush()
+            # output = stdout.read().decode()
+
+            # self.hide()
+            # self.main_window = MainWindow(ip_add, output, api_port)
+            # self.main_window.showMaximized()
+        else:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Authentication Error")
+            msg_box.setText("Voice authentication failed. Please try again.")
+            msg_box.exec_()
+            return
+        # else:
+        #     msg_box = QtWidgets.QMessageBox()
+        #     msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+        #     msg_box.setWindowTitle("Error")
+        #     msg_box.setText("Invalid Username")
+        #     msg_box.exec_()
+        #     return
+
+    def authenticate_voice(self):
+        model = joblib.load('voice_auth_model.pkl')
+
+        sample_rate = 16000
+        duration = 3  
+        audio_data = self.record_audio(sample_rate, duration)
+
+        mfcc_features = mfcc(audio_data, sample_rate)
+
+        flattened_features = mfcc_features.flatten()
+
+        expected_features = 2600  
+        if len(flattened_features) < expected_features:
+            pad_width = expected_features - len(flattened_features)
+            flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
+        else:
+            flattened_features = flattened_features[:expected_features]
+
+        features = flattened_features.reshape(1, -1)
+
+        prediction_proba = model.predict_proba(features)
+        probability_of_authorized = prediction_proba[0][1]  
+
+        print(prediction_proba)
+        print(probability_of_authorized)
+
+        threshold = 0.75
+
+        
+        if probability_of_authorized >= threshold:
+            self.handle_voice_auth_result(True)
+        else:
+            self.handle_voice_auth_result(False)
+
+    def record_audio(self, sample_rate, duration):
+        chunk_size = 1024
+        audio_format = pyaudio.paFloat32
+        channels = 1
+
+        audio = pyaudio.PyAudio()
+        stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
+
+        frames = []
+        for _ in range(0, int(sample_rate / chunk_size * duration)):
+            data = stream.read(chunk_size)
+            frames.append(np.frombuffer(data, dtype=np.float32))
+
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
+
+        audio_data = np.hstack(frames)
+        return audio_data
+        
+    def handle_voice_auth_result(self, authenticated):
+        if authenticated:
+            ip_add = self.ip_add.text()
+            username = self.username.text()
+            password = self.password.text()
+            ssh_port = self.ssh_port.text()
+            api_port = self.api_port.text()
 
             ssh_client = paramiko.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -1466,103 +1611,13 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
             self.hide()
             self.main_window = MainWindow(ip_add, output, api_port)
             self.main_window.showMaximized()
-        # else:
-        #     msg_box = QtWidgets.QMessageBox()
-        #     msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-        #     msg_box.setWindowTitle("Authentication Error")
-        #     msg_box.setText("Voice authentication failed. Please try again.")
-        #     msg_box.exec_()
-        #     return
         else:
             msg_box = QtWidgets.QMessageBox()
             msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-            msg_box.setWindowTitle("Error")
-            msg_box.setText("Invalid Username")
+            msg_box.setWindowTitle("Authentication Error")
+            msg_box.setText("Voice authentication failed. Please try again.")
             msg_box.exec_()
             return
-
-    # def authenticate_voice(self):
-    #     model = joblib.load('voice_auth_model.pkl')
-
-    #     sample_rate = 16000
-    #     duration = 3  
-    #     audio_data = self.record_audio(sample_rate, duration)
-
-    #     mfcc_features = mfcc(audio_data, sample_rate)
-
-    #     flattened_features = mfcc_features.flatten()
-
-    #     expected_features = 2600  
-    #     if len(flattened_features) < expected_features:
-    #         pad_width = expected_features - len(flattened_features)
-    #         flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
-    #     else:
-    #         flattened_features = flattened_features[:expected_features]
-
-    #     features = flattened_features.reshape(1, -1)
-
-    #     prediction_proba = model.predict_proba(features)
-    #     probability_of_authorized = prediction_proba[0][1]  
-
-    #     print(prediction_proba)
-    #     print(probability_of_authorized)
-
-    #     threshold = 0.7
-
-        
-    #     if probability_of_authorized >= threshold:
-    #         self.handle_voice_auth_result(True)
-    #     else:
-    #         self.handle_voice_auth_result(False)
-
-    # def record_audio(self, sample_rate, duration):
-    #     chunk_size = 1024
-    #     audio_format = pyaudio.paFloat32
-    #     channels = 1
-
-    #     audio = pyaudio.PyAudio()
-    #     stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
-
-    #     frames = []
-    #     for _ in range(0, int(sample_rate / chunk_size * duration)):
-    #         data = stream.read(chunk_size)
-    #         frames.append(np.frombuffer(data, dtype=np.float32))
-
-    #     stream.stop_stream()
-    #     stream.close()
-    #     audio.terminate()
-
-    #     audio_data = np.hstack(frames)
-    #     return audio_data
-        
-    # def handle_voice_auth_result(self, authenticated):
-    #     if authenticated:
-    #         ip_add = self.ip_add.text()
-    #         username = self.username.text()
-    #         password = self.password.text()
-    #         ssh_port = self.ssh_port.text()
-    #         api_port = self.api_port.text()
-
-    #         ssh_client = paramiko.SSHClient()
-    #         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    #         ssh_client.connect(ip_add, username=username, password=password, port=ssh_port)
-
-    #         command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"
-    #         stdin, stdout, stderr = ssh_client.exec_command(command)
-    #         stdin.write(password + '\n')
-    #         stdin.flush()
-    #         output = stdout.read().decode()
-
-    #         self.hide()
-    #         self.main_window = MainWindow(ip_add, output, api_port)
-    #         self.main_window.showMaximized()
-    #     else:
-    #         msg_box = QtWidgets.QMessageBox()
-    #         msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-    #         msg_box.setWindowTitle("Authentication Error")
-    #         msg_box.setText("Voice authentication failed. Please try again.")
-    #         msg_box.exec_()
-            # return
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)

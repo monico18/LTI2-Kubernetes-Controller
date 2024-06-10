@@ -13,7 +13,7 @@ def configure_api(api_key,ip_add, api_port):
     configuration.api_key_prefix['authorization'] = 'Bearer'
 
     api_instance = swagger_client.CoreV1Api(swagger_client.ApiClient(configuration))
-    
+        
     return api_instance
 
 def list_nodes(api_instance):
@@ -198,8 +198,7 @@ def create_pod(api_instance,namespace, json_content):
         
 def update_pod(api_instance,name ,namespace, json_content):
     try:
-        api_response = api_instance.patch_core_v1_namespaced_pod(name,namespace,json_content).to_dict()
-        print(json.dumps(api_response, indent=4))
+        api_instance.patch_core_v1_namespaced_pod(name,namespace,body=json_content).to_dict()
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_pod_for_all_namespaces: %s\n" % e)

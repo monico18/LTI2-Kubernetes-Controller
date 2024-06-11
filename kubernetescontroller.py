@@ -106,6 +106,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         
         self.plot_dashboard()
         
+        self.namespace_combo.currentIndexChanged.connect(self.update_pod_plots)
+        
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.plot_dashboard)
         self.update_timer.start(30000)
@@ -126,18 +128,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_add_namespace.clicked.connect(self.add_new_namespace)
         self.btn_delete_namespace.clicked.connect(self.rem_namespace)
         
-        self.btn_update_namespace.setEnabled(False)
         self.btn_delete_namespace.setEnabled(False)
         
         #Pods
         self.podsTable.clicked.connect(self.handle_podtable_item_clicked)
         self.btn_refresh_pod_table.clicked.connect(self.refresh_table_pods)
         self.btn_add_pod.clicked.connect(self.open_pod_config_page)
-        self.btn_update_pod.clicked.connect(self.open_pod_config_page)
         self.btn_delete_pod.clicked.connect(self.open_pod_config_page)
         self.btn_pod_container_details.clicked.connect(self.open_pod_config_page)
         
-        self.btn_update_pod.setEnabled(False)
         self.btn_delete_pod.setEnabled(False)
         self.btn_pod_container_details.setEnabled(False)
         
@@ -147,7 +146,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_add_deployment.clicked.connect(self.open_deployment_config_page)
         self.btn_delete_deployment.clicked.connect(self.open_deployment_config_page)
         
-        self.btn_update_deployment.setEnabled(False)
         self.btn_delete_deployment.setEnabled(False)
 
         #Services
@@ -157,7 +155,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_delete_service.clicked.connect(self.open_service_config_page)
         self.btn_service_port.clicked.connect(self.open_service_config_page)
         
-        self.btn_update_service.setEnabled(False)
         self.btn_delete_service.setEnabled(False)
         self.btn_service_port.setEnabled(False)
         
@@ -168,7 +165,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_delete_ingress.clicked.connect(self.open_ingress_config_page)
         self.btn_ingress_rules.clicked.connect(self.open_ingress_config_page)
         
-        self.btn_update_ingress.setEnabled(False)
         self.btn_delete_ingress.setEnabled(False)
         self.btn_ingress_rules.setEnabled(False)
         
@@ -237,16 +233,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         engine.say(command)
         engine.runAndWait()
     
+    def update_pod_plots(self):
+        selected_namespace = self.namespace_combo.currentText()
+        self.clear_layout(self.dashboard_pod_layout.layout())
+        self.plot_pods_cpu(namespace=selected_namespace)
+        self.plot_pods_mem(namespace=selected_namespace)
+    
     def plot_dashboard(self):
         # Clear previous widgets
         self.clear_layout(self.dashboard_node_layout.layout())
         self.clear_layout(self.dashboard_pod_layout.layout())
 
-        # Plot the existing graphs
         self.plot_cpu_usage()
         self.plot_memory_usage()
 
-        # Plot pods information
+        self.populate_namespace_combo()
         self.plot_pods_cpu()
         self.plot_pods_mem()
 
@@ -263,6 +264,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 cpu_usages.append(int(cpu_usage_str.strip('u')) / 1e6) 
 
         # Set the background color
+        if len(names) != len(cpu_usages):
+            raise ValueError("The lengths of names and cpu_usages lists do not match.")
+        
         background_color = (45 / 255, 45 / 255, 45 / 255) 
         plt.rcParams['figure.facecolor'] = background_color
 
@@ -281,13 +285,27 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         canvas_cpu = FigureCanvas(fig_cpu)
 
         # Add the plot to the group box
-        self.dashboard_node_layout.layout().addWidget(canvas_cpu)
+        self.dashboard_node_layout.layout().addWidget(canvas_cpu)   
 
     def plot_memory_usage(self):
         node_info_str = api.nodes_info(self.ip_address, self.api_key, self.api_port)
         node_info = json.loads(node_info_str)
         names = [node["name"] for node in node_info["nodes_info"]]
-        memory_usages = [int(node["memory_usage"].strip('Ki')) / 1024 for node in node_info["nodes_info"]]  # Convert from Ki to Mi
+        memory_usages = []
+
+        for node in node_info["nodes_info"]:
+            mem_usage_str = node["memory_usage"]
+            
+            if 'Ki' in mem_usage_str:
+                mem_usage = int(mem_usage_str.strip('Ki')) / 1024  
+            elif 'Mi' in mem_usage_str:
+                mem_usage = int(mem_usage_str.strip('Mi'))  
+            elif 'Bi' in mem_usage_str:
+                mem_usage = int(mem_usage_str.strip('Bi')) / (1024 ** 2)  
+            else:
+                mem_usage = 0  
+            
+            memory_usages.append(mem_usage)
 
         # Set the background color
         background_color = (45 / 255, 45 / 255, 45 / 255)  # RGB(45, 45, 45) in normalized form
@@ -323,7 +341,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             pod_name = pod["name"]
             for container in pod["container_info"]:
                 cpu_usage_str = container["usage"]["cpu"]
-                cpu_usage_str = container["usage"]["cpu"]
                 if 'n' in cpu_usage_str:
                     cpu_usage = int(cpu_usage_str.strip('n')) / 1e9  # Convert from nanocores to cores
                 elif 'u' in cpu_usage_str:
@@ -334,9 +351,19 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     pod_names.append(pod_name)
                     container_names.append(container["name"])
                     cpu_usages.append(cpu_usage)
+        if len(pod_names) == 0:
+            msg = QtWidgets.QMessageBox()
+            msg.setIcon(QtWidgets.QMessageBox.Warning)
+            msg.setText("No pods found in the selected namespace.")
+            msg.setWindowTitle("No Pods")
+            msg.exec_()
+            return
                 
-
-        # Create a DataFrame for the data
+        if len(pod_names) != len(container_names) or len(container_names) != len(cpu_usages):
+            raise ValueError("The lengths of pod_names, container_names, and cpu_usages lists do not match.")
+    
+        background_color = (45 / 255, 45 / 255, 45 / 255)
+        
         data = pd.DataFrame({
             "Pod": pod_names,
             "Container": container_names,
@@ -353,7 +380,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             height=3,
             aspect=3
         )
-
+        g.fig.patch.set_facecolor(background_color)
+        for ax in g.axes.flat:
+            ax.set_facecolor(background_color)
         # Set plot titles and labels
         g.fig.suptitle('CPU Usage by Pod and Container', color='white')
         g.set_xlabels('Pod', color='white')
@@ -361,10 +390,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         plt.xticks(color='white', rotation=0)
         plt.yticks(color='white')
 
-        # Add legend
-        background_color = (255 / 255, 255 / 255, 255 / 255)
-        plt.legend(title='Container', title_fontsize='13', fontsize='10', facecolor=background_color, edgecolor=background_color)
-
+        legend = plt.legend(title='Container', title_fontsize='13', fontsize='10', facecolor=background_color, edgecolor=background_color)
+        plt.setp(legend.get_texts(), color='white')
+        plt.setp(legend.get_title(), color='white')
+        
         # Adjust plot layout
         plt.tight_layout()
 
@@ -388,13 +417,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             for container in pod["container_info"]:
                 pod_names.append(pod_name)
                 container_names.append(container["name"])
-                memory_usages.append(int(container["usage"]["memory"].strip('Ki')) / 1024)
+                mem_usage_str = container["usage"]["memory"]
+                if 'Ki' in mem_usage_str:
+                    mem_usage = int(mem_usage_str.strip('Ki')) / 1024  # Convert from Ki to Mi
+                elif 'Mi' in mem_usage_str:
+                    mem_usage = int(mem_usage_str.strip('Mi'))  # Already in Mi
+                elif 'Bi' in mem_usage_str:
+                    mem_usage = int(mem_usage_str.strip('Bi')) / (1024 ** 2)  # Convert from Bi to Mi
+                else:
+                    mem_usage = 0 
+                    
+        if len(pod_names) == 0:
+            # Display message box if there are no pods
+            msg = QtWidgets.QMessageBox()
+            msg.setIcon(QtWidgets.QMessageBox.Warning)
+            msg.setText("No pods found in the selected namespace.")
+            msg.setWindowTitle("No Pods")
+            msg.exec_()
+            return
 
+        background_color = (45 / 255, 45 / 255, 45 / 255)
         # Create a DataFrame for the data
         data = pd.DataFrame({
             "Pod": pod_names,
             "Container": container_names,
-            "Memory Usage (Mi)": memory_usages
+            "Memory Usage (Mi)": mem_usage
         })
 
 
@@ -408,7 +455,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             height=3,
             aspect=2
             )
-
+        
+        g.fig.patch.set_facecolor(background_color)
+        for ax in g.axes.flat:
+            ax.set_facecolor(background_color)
+            
         # Set plot titles and labels
         g.fig.suptitle('Memory Usage by Pod and Container', color='white')
         g.set_xlabels('Pod', color='white')
@@ -417,9 +468,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         plt.yticks(color='white')
 
         # Add legend
-        background_color = (255 / 255, 255 / 255, 255 / 255)
-        plt.legend(title='Container', title_fontsize='13', fontsize='10', facecolor=background_color, edgecolor=background_color)
-
+        legend = plt.legend(title='Container', title_fontsize='13', fontsize='10', facecolor=background_color, edgecolor=background_color)
+        plt.setp(legend.get_texts(), color='white')
+        plt.setp(legend.get_title(), color='white')
+        
         # Adjust plot layout
         plt.tight_layout()
 
@@ -428,6 +480,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # Add the plot to the pod information layout
         self.dashboard_pod_layout.layout().addWidget(canvas)
+
+    def populate_namespace_combo(self):
+        namespaces_json_str = api.list_namespaces(self.api_instance)
+        namespaces_json = json.loads(namespaces_json_str)
+        namespaces = [namespace["name"] for namespace in namespaces_json["namespaces"]]
+        
+        self.namespace_combo.clear()
+        self.namespace_combo.addItems(namespaces)
 
     def clear_layout(self, layout):
         while layout.count():
@@ -439,7 +499,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         api.delete_namespace(self.api_instance, self.selected_namespace["name"])
         time.sleep(3)
         self.refresh_table_namespaces()
-        self.btn_update_namespace.setEnabled(False)
         self.btn_delete_namespace.setEnabled(False)
         
     def add_new_namespace(self):
@@ -469,7 +528,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             api.delete_ingress(self.ip_address, self.api_key, self.api_port, self.selected_ingress["name"], self.selected_ingress["namespace"] )
             time.sleep(3)
             self.refresh_table_ingress()
-            self.btn_update_ingress.setEnabled(False)
             self.btn_delete_ingress.setEnabled(False)
         if sender == self.btn_add_ingress:
             self.ingress_config_page = IngressPage(self.api_instance, self.ip_address, self.api_key, self.api_port)
@@ -491,7 +549,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             api.delete_service(self.api_instance, self.selected_service["name"], self.selected_service["namespace"] )
             time.sleep(3)
             self.refresh_table_service()
-            self.btn_update_service.setEnabled(False)
             self.btn_delete_service.setEnabled(False)
         if sender == self.btn_add_service:
             self.service_config_page = ServicePage(self.api_instance, self.ip_address, self.api_key, self.api_port)
@@ -513,7 +570,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 api.delete_deployment(self.ip_address, self.api_key, self.api_port, self.selected_deployment["name"], self.selected_deployment["namespace"])
                 time.sleep(3)
                 self.refresh_table_deployments()
-                self.btn_update_deployment.setEnabled(False)
                 self.btn_delete_deployment.setEnabled(False)
         elif sender == self.btn_add_deployment:
             self.deployment_config_page = DeploymentPage(self.api_instance, self.ip_address, self.api_key, self.api_port)
@@ -527,17 +583,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             api.delete_pod(self.api_instance, self.selected_pod["name"], self.selected_pod["namespace"])
             time.sleep(3)
             self.refresh_table_pods()
-            self.btn_update_pod.setEnabled(False)
             self.btn_delete_pod.setEnabled(False)
-        if sender == self.btn_update_pod: 
-            if self.selected_pod is not None:
-                if not self.pod_config_page:
-                    self.pod_config_page = PodPage(self.api_instance)
-                    self.pod_config_page.configSaved.connect(self.handleConfigSaved)
-                self.pod_config_page.populate_pod_data(self.selected_pod)
-                self.pod_config_page.show()
-                self.btn_update_pod.setEnabled(False)
-                self.btn_delete_pod.setEnabled(False)
         if sender == self.btn_add_pod:
             self.pod_config_page = PodPage(self.api_instance)
             self.pod_config_page.configSaved.connect(self.handleConfigSaved)
@@ -756,7 +802,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             print(f"Error populating Services: {e}")
                 
     def handle_namespacetable_item_clicked(self,item):
-        self.btn_update_namespace.setEnabled(True)
         self.btn_delete_namespace.setEnabled(True) 
         row = item.row()
         name = self.namespaceTable.item(row,0).text()
@@ -764,7 +809,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.selected_namespace = json.loads(self.selected_namespace)     
                 
     def handle_podtable_item_clicked(self, item):
-        self.btn_update_pod.setEnabled(True)
         self.btn_delete_pod.setEnabled(True)
         self.btn_pod_container_details.setEnabled(True)
         row = item.row()
@@ -774,7 +818,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.selected_pod = json.loads(self.selected_pod)
     
     def handle_deploytable_item_clicked(self, item):
-        self.btn_update_deployment.setEnabled(True)
         self.btn_delete_deployment.setEnabled(True)
         row = item.row()
         name = self.deploymentTable.item(row,0).text()
@@ -783,7 +826,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.selected_deployment = json.loads(self.selected_deployment)
         
     def handle_servicetable_item_clicked(self, item):
-        self.btn_update_service.setEnabled(True)
         self.btn_delete_service.setEnabled(True)
         self.btn_service_port.setEnabled(True)
         row = item.row()
@@ -793,7 +835,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.selected_service = json.loads(self.selected_service)
        
     def handle_ingresstable_item_clicked(self,item):
-        self.btn_update_ingress.setEnabled(True)
         self.btn_delete_ingress.setEnabled(True)
         self.btn_ingress_rules.setEnabled(True)
         row = item.row()
@@ -1506,97 +1547,7 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
         api_port = self.api_port.text()
         
         if self.ip_add.text() == "10.0.4.149":
-            self.authenticate_voice()
-
-            # ssh_client = paramiko.SSHClient()
-            # ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            # ssh_client.connect(ip_add, username=username, password=password, port=ssh_port)
-
-            # command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"
-            # stdin, stdout, stderr = ssh_client.exec_command(command)
-            # stdin.write(password + '\n')
-            # stdin.flush()
-            # output = stdout.read().decode()
-
-            # self.hide()
-            # self.main_window = MainWindow(ip_add, output, api_port)
-            # self.main_window.showMaximized()
-        else:
-            msg_box = QtWidgets.QMessageBox()
-            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-            msg_box.setWindowTitle("Authentication Error")
-            msg_box.setText("Voice authentication failed. Please try again.")
-            msg_box.exec_()
-            return
-        # else:
-        #     msg_box = QtWidgets.QMessageBox()
-        #     msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-        #     msg_box.setWindowTitle("Error")
-        #     msg_box.setText("Invalid Username")
-        #     msg_box.exec_()
-        #     return
-
-    def authenticate_voice(self):
-        model = joblib.load('voice_auth_model.pkl')
-
-        sample_rate = 16000
-        duration = 3  
-        audio_data = self.record_audio(sample_rate, duration)
-
-        mfcc_features = mfcc(audio_data, sample_rate)
-
-        flattened_features = mfcc_features.flatten()
-
-        expected_features = 2600  
-        if len(flattened_features) < expected_features:
-            pad_width = expected_features - len(flattened_features)
-            flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
-        else:
-            flattened_features = flattened_features[:expected_features]
-
-        features = flattened_features.reshape(1, -1)
-
-        prediction_proba = model.predict_proba(features)
-        probability_of_authorized = prediction_proba[0][1]  
-
-        print(prediction_proba)
-        print(probability_of_authorized)
-
-        threshold = 0.75
-
-        
-        if probability_of_authorized >= threshold:
-            self.handle_voice_auth_result(True)
-        else:
-            self.handle_voice_auth_result(False)
-
-    def record_audio(self, sample_rate, duration):
-        chunk_size = 1024
-        audio_format = pyaudio.paFloat32
-        channels = 1
-
-        audio = pyaudio.PyAudio()
-        stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
-
-        frames = []
-        for _ in range(0, int(sample_rate / chunk_size * duration)):
-            data = stream.read(chunk_size)
-            frames.append(np.frombuffer(data, dtype=np.float32))
-
-        stream.stop_stream()
-        stream.close()
-        audio.terminate()
-
-        audio_data = np.hstack(frames)
-        return audio_data
-        
-    def handle_voice_auth_result(self, authenticated):
-        if authenticated:
-            ip_add = self.ip_add.text()
-            username = self.username.text()
-            password = self.password.text()
-            ssh_port = self.ssh_port.text()
-            api_port = self.api_port.text()
+            # self.authenticate_voice()
 
             ssh_client = paramiko.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -1611,13 +1562,103 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
             self.hide()
             self.main_window = MainWindow(ip_add, output, api_port)
             self.main_window.showMaximized()
+        # else:
+        #     msg_box = QtWidgets.QMessageBox()
+        #     msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+        #     msg_box.setWindowTitle("Authentication Error")
+        #     msg_box.setText("Voice authentication failed. Please try again.")
+        #     msg_box.exec_()
+        #     return
         else:
             msg_box = QtWidgets.QMessageBox()
             msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-            msg_box.setWindowTitle("Authentication Error")
-            msg_box.setText("Voice authentication failed. Please try again.")
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Invalid Username")
             msg_box.exec_()
             return
+
+    # def authenticate_voice(self):
+    #     model = joblib.load('voice_auth_model.pkl')
+
+    #     sample_rate = 16000
+    #     duration = 3  
+    #     audio_data = self.record_audio(sample_rate, duration)
+
+    #     mfcc_features = mfcc(audio_data, sample_rate)
+
+    #     flattened_features = mfcc_features.flatten()
+
+    #     expected_features = 2600  
+    #     if len(flattened_features) < expected_features:
+    #         pad_width = expected_features - len(flattened_features)
+    #         flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
+    #     else:
+    #         flattened_features = flattened_features[:expected_features]
+
+    #     features = flattened_features.reshape(1, -1)
+
+    #     prediction_proba = model.predict_proba(features)
+    #     probability_of_authorized = prediction_proba[0][1]  
+
+    #     print(prediction_proba)
+    #     print(probability_of_authorized)
+
+    #     threshold = 0.75
+
+        
+    #     if probability_of_authorized >= threshold:
+    #         self.handle_voice_auth_result(True)
+    #     else:
+    #         self.handle_voice_auth_result(False)
+
+    # def record_audio(self, sample_rate, duration):
+    #     chunk_size = 1024
+    #     audio_format = pyaudio.paFloat32
+    #     channels = 1
+
+    #     audio = pyaudio.PyAudio()
+    #     stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
+
+    #     frames = []
+    #     for _ in range(0, int(sample_rate / chunk_size * duration)):
+    #         data = stream.read(chunk_size)
+    #         frames.append(np.frombuffer(data, dtype=np.float32))
+
+    #     stream.stop_stream()
+    #     stream.close()
+    #     audio.terminate()
+
+    #     audio_data = np.hstack(frames)
+    #     return audio_data
+        
+    # def handle_voice_auth_result(self, authenticated):
+    #     if authenticated:
+    #         ip_add = self.ip_add.text()
+    #         username = self.username.text()
+    #         password = self.password.text()
+    #         ssh_port = self.ssh_port.text()
+    #         api_port = self.api_port.text()
+
+    #         ssh_client = paramiko.SSHClient()
+    #         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    #         ssh_client.connect(ip_add, username=username, password=password, port=ssh_port)
+
+    #         command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"
+    #         stdin, stdout, stderr = ssh_client.exec_command(command)
+    #         stdin.write(password + '\n')
+    #         stdin.flush()
+    #         output = stdout.read().decode()
+
+    #         self.hide()
+    #         self.main_window = MainWindow(ip_add, output, api_port)
+    #         self.main_window.showMaximized()
+    #     else:
+    #         msg_box = QtWidgets.QMessageBox()
+    #         msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+    #         msg_box.setWindowTitle("Authentication Error")
+    #         msg_box.setText("Voice authentication failed. Please try again.")
+    #         msg_box.exec_()
+    #         return
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)

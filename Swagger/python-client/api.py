@@ -416,7 +416,7 @@ def list_selected_ingress(ip_add, api_key, api_port, name, namespace):
         filtered_response = {
                     "name": api_response["metadata"]["name"],
                     "namespace": api_response['metadata']["namespace"],
-                    "num_rules": str(len(api_response["spec"]["rules"])),
+                    "rules": api_response["spec"]["rules"],
                 }
         
         return json.dumps(filtered_response, indent=4)

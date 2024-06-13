@@ -1568,7 +1568,7 @@
              <enum>Qt::LeftToRight</enum>
             </property>
             <property name="currentIndex">
-             <number>0</number>
+             <number>6</number>
             </property>
             <widget class="QWidget" name="page_1">
              <property name="enabled">

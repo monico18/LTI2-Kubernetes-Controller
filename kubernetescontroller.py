@@ -533,7 +533,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.ingress_config_page = IngressPage(self.api_instance, self.ip_address, self.api_key, self.api_port)
             self.ingress_config_page.configSaved.connect(self.handleConfigSaved)
             self.ingress_config_page.show()
-        if sender == self.ingress_rules_info_page:
+        if sender == self.btn_ingress_rules:
             rules = self.selected_ingress.get('rules', [])
             if not rules:
                 QtWidgets.QMessageBox.critical(self, "Error", "The selected ingress has no rules.")
@@ -822,7 +822,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         row = item.row()
         name = self.deploymentTable.item(row,0).text()
         namespace = self.deploymentTable.item(row,1).text()
-        self.selected_deployment = api.list_selected_deployment(self.ip_address, self.api_key, name, namespace)
+        self.selected_deployment = api.list_selected_deployment(self.ip_address, self.api_key, self.api_port, name, namespace)
         self.selected_deployment = json.loads(self.selected_deployment)
         
     def handle_servicetable_item_clicked(self, item):
@@ -840,8 +840,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         row = item.row()
         name = self.ingressTable.item(row,0).text()
         namespace = self.ingressTable.item(row,1).text()
-        self.selected_ingress = api.list_selected_ingress(self.ip_address, self.api_key, name, namespace)
-        self.selected_ingress = json.loads(self.selected_ingress)     
+        self.selected_ingress = api.list_selected_ingress(self.ip_address, self.api_key,self.api_port, name, namespace)
+        self.selected_ingress = json.loads(self.selected_ingress)
             
 class IngressRulesInfo(QtWidgets.QMainWindow, Ui_IngressRulesInfo):
     def __init__(self):
@@ -855,11 +855,16 @@ class IngressRulesInfo(QtWidgets.QMainWindow, Ui_IngressRulesInfo):
         for rule in rules:
             ingress_rules_text += "Host: {}\n".format(rule.get('host', ''))
             ingress_rules_text += "Paths:\n"
-            paths = rule.get('paths', [])
+            http = rule.get('http', {})
+            paths = http.get('paths', [])
             for path in paths:
                 ingress_rules_text += "  Path: {}\n".format(path.get('path', ''))
-                ingress_rules_text += "  Service Name: {}\n".format(path.get('service_name', ''))
-                ingress_rules_text += "  Service Port: {}\n".format(path.get('service_port', ''))
+                ingress_rules_text += "  Path Type: {}\n".format(path.get('path_type', ''))
+                backend = path.get('backend', {})
+                service = backend.get('service', {})
+                ingress_rules_text += "  Service Name: {}\n".format(service.get('name', ''))
+                port = service.get('port', {})
+                ingress_rules_text += "  Service Port: {}\n".format(port.get('number', ''))
             ingress_rules_text += "\n"
 
         self.ingress_rules_info.setPlainText(ingress_rules_text)
@@ -891,25 +896,45 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         self.btn_cancel_ingress.clicked.connect(self.close)
         self.btn_add_rule.clicked.connect(self.add_rule_to_table)
         self.btn_remove_rule.clicked.connect(self.remove_selected_rule)
+        
+        self.populate_services()
+        
+        self.namespaces.currentIndexChanged.connect(self.populate_services)
 
 
         for col in range(5):
             self.rulesTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
 
+    def populate_services(self):
+        namespace = self.namespaces.currentText()
+        if not namespace:
+            return
+
+        self.services.clear()
+
+        response = api.list_service(self.api_instance)
+        services_data = json.loads(response)
+        namespace_services = [
+            service for service in services_data["services"]
+            if service["namespace"] == namespace
+        ]
+        service_entry = []
+        for service in namespace_services:
+            service_entry.append(f"{service['name']}:{service['label']}:{service['num_ports']}")
+        self.services.addItems(service_entry)
+
     def add_rule_to_table(self):
         host = self.line_host.text()
         path = self.line_path.text()
         path_type = self.path_types.currentText()
-        service_name = self.line_service_name.text()
-        port = self.line_port.text()
+        service_entry = self.services.currentText()
         
-        if not host or not path or not service_name or not port:
+        if not host or not path or not service_entry:
             self.show_error("Please fill in all rule fields.")
             return
         
-        if not port.isdigit():
-            self.show_error("Port must be a number.")
-            return
+       
+        service_name, service_label, num_ports = service_entry.split(":")
         
         row_count = self.rulesTable.rowCount()
         self.rulesTable.insertRow(row_count)
@@ -917,14 +942,14 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         self.rulesTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(path)) 
         self.rulesTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(path_type))
         self.rulesTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(service_name))
-        self.rulesTable.setItem(row_count, 4, QtWidgets.QTableWidgetItem(port))
+        self.rulesTable.setItem(row_count, 4, QtWidgets.QTableWidgetItem(num_ports))
         
         self.rules.append({
             "host": host,
             "path": path,
             "pathType": path_type,
             "serviceName": service_name,
-            "servicePort": int(port)
+            "servicePort": num_ports
         })
         
         self.clear_rule_fields()
@@ -938,7 +963,7 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         host = self.rulesTable.item(removed_row, 0).text()
         path = self.rulesTable.item(removed_row, 1).text()
         self.rules = [r for r in self.rules if r["host"] != host or r["path"] != path]
-        self.rulesTable.removeRow(removed_row)
+        self.rulesTable.removeRow(removed_row)  
 
     def save_configuration(self):
         name = self.line_name.text().lower()
@@ -949,37 +974,47 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
             return
 
         params = {
-            "apiVersion": "networking.k8s.io/v1",
-            "kind": "Ingress",
-            "metadata": {
-                "name": name,
-                "namespace": namespace
-            },
-            "spec": {
-                "rules": [
-                    {
-                        "host": rule["host"],
-                        "http": {
-                            "paths": [
-                                {
-                                    "path": rule["path"],
-                                    "pathType": rule["pathType"],
-                                    "backend": {
-                                        "service": {
-                                            "name": rule["serviceName"],
-                                            "port": {
-                                                "number": rule["servicePort"]
-                                            }
-                                        }
+                "apiVersion": "networking.k8s.io/v1",
+                "kind": "Ingress",
+                "metadata": {
+                    "name": name,
+                    "namespace": namespace
+                },
+                "spec": {
+                    "rules": []
+                }
+            }
+
+        for rule in self.rules:
+            service_details = json.loads(api.list_selected_service(self.api_instance, rule["serviceName"], namespace))
+            service_ports = service_details["ports"]
+
+            if service_ports:
+                port_number = service_ports[0]["port"]
+            else:
+                self.show_error(f"No ports found for service {rule['serviceName']}")
+                return
+
+            params["spec"]["rules"].append({
+                "host": rule["host"],
+                "http": {
+                    "paths": [
+                        {
+                            "path": rule["path"],
+                            "pathType": rule["pathType"],
+                            "backend": {
+                                "service": {
+                                    "name": rule["serviceName"],
+                                    "port": {
+                                        "number": port_number
                                     }
                                 }
-                            ]
+                            }
                         }
-                    } for rule in self.rules
-                ]
-            }
-        }
-
+                    ]
+                }
+            })
+                
         api.create_ingress(self.ip_address, self.api_key, self.api_port, namespace, params)
         self.configSaved.emit()
         self.close()
@@ -987,8 +1022,7 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
     def clear_rule_fields(self):
         self.line_host.clear()
         self.line_path.clear()
-        self.line_service_name.clear()
-        self.line_port.clear()
+
 
     def show_error(self, message):
         msg_box = QtWidgets.QMessageBox()

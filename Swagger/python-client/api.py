@@ -437,7 +437,6 @@ def create_ingress(ip_add, api_key, api_port,  namespace, json_contents):
         api_instance = swagger_client.NetworkingV1Api(swagger_client.ApiClient(configuration))
         
         api_response = api_instance.create_networking_v1_namespaced_ingress(namespace, json_contents).to_dict()
-        print(json.dumps(api_response, indent=4))
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)

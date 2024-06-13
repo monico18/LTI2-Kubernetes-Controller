@@ -924,11 +924,12 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         path_type = self.path_types.currentText()
         service_entry = self.services.currentText()
         
-        if not host or not path or not service_entry:
+        if not path or not service_entry:
             self.show_error("Please fill in all rule fields.")
             return
         
-       
+        if not host:
+            host = ""
         service_name, service_label, num_ports = service_entry.split(":")
         
         row_count = self.rulesTable.rowCount()
@@ -973,7 +974,10 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
                 "kind": "Ingress",
                 "metadata": {
                     "name": name,
-                    "namespace": namespace
+                    "namespace": namespace,
+                    "annotations":{
+                        "traefik.ingress.kubernetes.io/router.entrypoints":"web"
+                    }
                 },
                 "spec": {
                     "rules": []

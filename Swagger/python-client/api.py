@@ -345,6 +345,8 @@ def list_selected_service(api_instance, name, namespace):
                     "namespace": api_response['metadata']["namespace"],
                     "label": api_response["metadata"]["labels"]["app"],
                     "ports": api_response["spec"]["ports"],
+                    "deployment_label": api_response["spec"]["selector"]["app"],
+                    "type" : api_response["spec"]["type"]
                 }
 
         return json.dumps(filtered_response, indent=4)        

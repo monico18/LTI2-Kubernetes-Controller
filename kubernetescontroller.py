@@ -247,8 +247,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.plot_memory_usage()
 
         self.populate_namespace_combo()
-        self.plot_pods_cpu()
-        self.plot_pods_mem()
+        self.update_pod_plots()
 
     def plot_cpu_usage(self):
         node_info_str = api.nodes_info(self.ip_address, self.api_key, self.api_port)
@@ -1039,6 +1038,8 @@ class ServicePortInfo(QtWidgets.QMainWindow, Ui_ServicePortInfo):
         for port in ports:
             service_port_text += "Name: {}\n".format(port.get('name', ''))
             service_port_text += "Port: {}\n".format(port.get('port', ''))
+            service_port_text += "Deployment Label: {}\n".format(selected_service.get('deployment_label', ''))
+            service_port_text += "Type: {}\n".format(selected_service.get('type', ''))
             service_port_text += "Target Port: {}\n".format(port.get('target_port', ''))
             service_port_text += "Protocol: {}\n".format(port.get('protocol', ''))
             service_port_text += "Node Port: {}\n".format(port.get('node_port', ''))
@@ -1073,7 +1074,7 @@ class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
             labels_options.add(label)
             
         protocol_options = ["TCP","UDP","SCTP"]
-        load_balancer_options = ["ClusterIP ","NodePort","LoadBalancer","ExternalName","Headless"]
+        load_balancer_options = ["ClusterIP","NodePort","LoadBalancer","ExternalName","Headless"]
 
         self.namespaces.addItems(namespace_options)
         self.deploy_labels.addItems(sorted(labels_options))

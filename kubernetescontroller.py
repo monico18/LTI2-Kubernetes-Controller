@@ -35,7 +35,6 @@ import joblib
 import pyaudio
 import wave
 
-
 api_directory = os.path.join(os.path.dirname(__file__), 'Swagger', 'python-client')
 sys.path.append(api_directory)
 
@@ -881,17 +880,14 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         
         self.rules = []
 
-        # Populate namespaces dropdown
         response = api.list_namespaces(self.api_instance)
         namespace_data = json.loads(response)
         namespace_options = [ns.get('name', '') for ns in namespace_data["namespaces"]]
         self.namespaces.addItems(namespace_options)
 
-        # Populate path types dropdown
         path_types = ["Prefix", "Exact", "ImplementationSpecific"]
         self.path_types.addItems(path_types)
 
-        # Connect buttons
         self.btn_apply_ingress.clicked.connect(self.save_configuration)
         self.btn_cancel_ingress.clicked.connect(self.close)
         self.btn_add_rule.clicked.connect(self.add_rule_to_table)
@@ -1581,7 +1577,106 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
         api_port = self.api_port.text()
         
         if self.ip_add.text() == "10.0.4.149":
-            # self.authenticate_voice()
+            self.authenticate_voice()
+
+            # ssh_client = paramiko.SSHClient()
+            # ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            # ssh_client.connect(ip_add, username=username, password=password, port=ssh_port)
+
+            # command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"
+            # stdin, stdout, stderr = ssh_client.exec_command(command)
+            # stdin.write(password + '\n')
+            # stdin.flush()
+            # output = stdout.read().decode()
+
+            # self.hide()
+            # self.main_window = MainWindow(ip_add, output, api_port)
+            # self.main_window.showMaximized()
+        else:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Authentication Error")
+            msg_box.setText("Voice authentication failed. Please try again.")
+            msg_box.exec_()
+            return
+        # else:
+        #     msg_box = QtWidgets.QMessageBox()
+        #     msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+        #     msg_box.setWindowTitle("Error")
+        #     msg_box.setText("Invalid Username")
+        #     msg_box.exec_()
+        #     return
+
+    def authenticate_voice(self):
+        self.show_recording_message()
+        model = joblib.load('voice_auth_model.pkl')
+
+        sample_rate = 16000
+        duration = 3  
+        audio_data = self.record_audio(sample_rate, duration)
+
+        mfcc_features = mfcc(audio_data, sample_rate)
+
+        flattened_features = mfcc_features.flatten()
+
+        expected_features = 2600  
+        if len(flattened_features) < expected_features:
+            pad_width = expected_features - len(flattened_features)
+            flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
+        else:
+            flattened_features = flattened_features[:expected_features]
+
+        features = flattened_features.reshape(1, -1)
+
+        prediction_proba = model.predict_proba(features)
+        probability_of_authorized = prediction_proba[0][1]  
+
+        print(prediction_proba)
+        print(probability_of_authorized)
+
+        threshold = 0.75
+
+        self.message_box.hide()
+        if probability_of_authorized >= threshold:
+            self.handle_voice_auth_result(True)
+        else:
+            self.handle_voice_auth_result(False)
+            
+    def show_recording_message(self):
+        self.message_box = QtWidgets.QMessageBox()
+        self.message_box.setWindowTitle("Recording")
+        self.message_box.setText("Listening to your voice...")
+        self.message_box.setStandardButtons(QtWidgets.QMessageBox.NoButton)  # No buttons
+        self.message_box.setStyleSheet("QMessageBox { background-color: white; color: black; }")
+        self.message_box.show()
+
+    def record_audio(self, sample_rate, duration):
+        chunk_size = 1024
+        audio_format = pyaudio.paFloat32
+        channels = 1
+
+        audio = pyaudio.PyAudio()
+        stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
+
+        frames = []
+        for _ in range(0, int(sample_rate / chunk_size * duration)):
+            data = stream.read(chunk_size)
+            frames.append(np.frombuffer(data, dtype=np.float32))
+
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
+
+        audio_data = np.hstack(frames)
+        return audio_data
+        
+    def handle_voice_auth_result(self, authenticated):
+        if authenticated:
+            ip_add = self.ip_add.text()
+            username = self.username.text()
+            password = self.password.text()
+            ssh_port = self.ssh_port.text()
+            api_port = self.api_port.text()
 
             ssh_client = paramiko.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -1596,103 +1691,13 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
             self.hide()
             self.main_window = MainWindow(ip_add, output, api_port)
             self.main_window.showMaximized()
-        # else:
-        #     msg_box = QtWidgets.QMessageBox()
-        #     msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-        #     msg_box.setWindowTitle("Authentication Error")
-        #     msg_box.setText("Voice authentication failed. Please try again.")
-        #     msg_box.exec_()
-        #     return
         else:
             msg_box = QtWidgets.QMessageBox()
             msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-            msg_box.setWindowTitle("Error")
-            msg_box.setText("Invalid Username")
+            msg_box.setWindowTitle("Authentication Error")
+            msg_box.setText("Voice authentication failed. Please try again.")
             msg_box.exec_()
             return
-
-    # def authenticate_voice(self):
-    #     model = joblib.load('voice_auth_model.pkl')
-
-    #     sample_rate = 16000
-    #     duration = 3  
-    #     audio_data = self.record_audio(sample_rate, duration)
-
-    #     mfcc_features = mfcc(audio_data, sample_rate)
-
-    #     flattened_features = mfcc_features.flatten()
-
-    #     expected_features = 2600  
-    #     if len(flattened_features) < expected_features:
-    #         pad_width = expected_features - len(flattened_features)
-    #         flattened_features = np.pad(flattened_features, (0, pad_width), mode='constant')
-    #     else:
-    #         flattened_features = flattened_features[:expected_features]
-
-    #     features = flattened_features.reshape(1, -1)
-
-    #     prediction_proba = model.predict_proba(features)
-    #     probability_of_authorized = prediction_proba[0][1]  
-
-    #     print(prediction_proba)
-    #     print(probability_of_authorized)
-
-    #     threshold = 0.75
-
-        
-    #     if probability_of_authorized >= threshold:
-    #         self.handle_voice_auth_result(True)
-    #     else:
-    #         self.handle_voice_auth_result(False)
-
-    # def record_audio(self, sample_rate, duration):
-    #     chunk_size = 1024
-    #     audio_format = pyaudio.paFloat32
-    #     channels = 1
-
-    #     audio = pyaudio.PyAudio()
-    #     stream = audio.open(format=audio_format, channels=channels, rate=sample_rate, input=True, frames_per_buffer=chunk_size)
-
-    #     frames = []
-    #     for _ in range(0, int(sample_rate / chunk_size * duration)):
-    #         data = stream.read(chunk_size)
-    #         frames.append(np.frombuffer(data, dtype=np.float32))
-
-    #     stream.stop_stream()
-    #     stream.close()
-    #     audio.terminate()
-
-    #     audio_data = np.hstack(frames)
-    #     return audio_data
-        
-    # def handle_voice_auth_result(self, authenticated):
-    #     if authenticated:
-    #         ip_add = self.ip_add.text()
-    #         username = self.username.text()
-    #         password = self.password.text()
-    #         ssh_port = self.ssh_port.text()
-    #         api_port = self.api_port.text()
-
-    #         ssh_client = paramiko.SSHClient()
-    #         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    #         ssh_client.connect(ip_add, username=username, password=password, port=ssh_port)
-
-    #         command = f"sudo -S -p '' kubectl -n kube-system create token admin-user"
-    #         stdin, stdout, stderr = ssh_client.exec_command(command)
-    #         stdin.write(password + '\n')
-    #         stdin.flush()
-    #         output = stdout.read().decode()
-
-    #         self.hide()
-    #         self.main_window = MainWindow(ip_add, output, api_port)
-    #         self.main_window.showMaximized()
-    #     else:
-    #         msg_box = QtWidgets.QMessageBox()
-    #         msg_box.setIcon(QtWidgets.QMessageBox.Critical)
-    #         msg_box.setWindowTitle("Authentication Error")
-    #         msg_box.setText("Voice authentication failed. Please try again.")
-    #         msg_box.exec_()
-    #         return
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)

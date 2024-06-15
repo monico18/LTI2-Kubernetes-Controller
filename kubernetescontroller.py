@@ -337,6 +337,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         for pod in pods_cpu_info["pods_info"]:
             pod_name = pod["name"]
+            if '-' in pod_name:
+                parts = pod_name.split('-')
+                pod_name = f"{parts[0]}-{parts[-1]}"
             for container in pod["container_info"]:
                 cpu_usage_str = container["usage"]["cpu"]
                 if 'n' in cpu_usage_str:
@@ -356,9 +359,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             msg.setWindowTitle("No Pods")
             msg.exec_()
             return
-                
-        if len(pod_names) != len(container_names) or len(container_names) != len(cpu_usages):
-            raise ValueError("The lengths of pod_names, container_names, and cpu_usages lists do not match.")
     
         background_color = (45 / 255, 45 / 255, 45 / 255)
         
@@ -412,6 +412,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         for pod in pods_mem_info["pods_info"]:
             pod_name = pod["name"]
+            if '-' in pod_name:
+                parts = pod_name.split('-')
+                pod_name = f"{parts[0]}-{parts[-1]}"
             for container in pod["container_info"]:
                 pod_names.append(pod_name)
                 container_names.append(container["name"])
@@ -501,6 +504,14 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         
     def add_new_namespace(self):
         namespace_name = self.line_namespace.text().lower()
+        if not namespace_name:
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Critical)
+            msg_box.setWindowTitle("Error")
+            msg_box.setText("Please fill in the namespace area before adding anything.")
+            msg_box.exec_()
+            return
+        
         try:
 
             namespace_payload = {
@@ -625,23 +636,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 name=nodes.get('name', '')
                 pod_cidr = nodes.get('pod_CIDR', '')           
                 node_info = nodes.get('node_info', '')  
+                node_ip = nodes.get('node_ip', '')
 
                 self.nodesTable.insertRow(row)
-
+                
                 self.nodesTable.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
                 self.nodesTable.setItem(row, 1, QtWidgets.QTableWidgetItem(pod_cidr))
                 self.nodesTable.setItem(row, 2, QtWidgets.QTableWidgetItem(node_info))
+                self.nodesTable.setItem(row, 3, QtWidgets.QTableWidgetItem(node_ip))
 
-
-                for col in range(3):
+                for col in range(4):
                     item = self.nodesTable.item(row, col)
                     if item:
                         item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
 
 
-                for col in range(3):
+                for col in range(4):
                     self.nodesTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
         except Exception as e:
+        
             print(f"Error populating Nodes: {e}")
             
     def refresh_table_namespaces(self):
@@ -895,9 +908,13 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         self.populate_services()
         
         self.namespaces.currentIndexChanged.connect(self.populate_services)
+        
+        self.btn_remove_rule.setEnabled(False)
+        self.rulesTable.selectionModel().selectionChanged.connect(self.update_remove_button_state)
 
 
-        for col in range(5):
+
+        for col in range(4):
             self.rulesTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
 
     def populate_services(self):
@@ -919,7 +936,6 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         self.services.addItems(service_entry)
 
     def add_rule_to_table(self):
-        host = self.line_host.text()
         path = self.line_path.text()
         path_type = self.path_types.currentText()
         service_entry = self.services.currentText()
@@ -928,20 +944,16 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
             self.show_error("Please fill in all rule fields.")
             return
         
-        if not host:
-            host = ""
         service_name, service_label, num_ports = service_entry.split(":")
         
         row_count = self.rulesTable.rowCount()
         self.rulesTable.insertRow(row_count)
-        self.rulesTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(host))
-        self.rulesTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(path)) 
-        self.rulesTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(path_type))
-        self.rulesTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(service_name))
-        self.rulesTable.setItem(row_count, 4, QtWidgets.QTableWidgetItem(num_ports))
+        self.rulesTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(path)) 
+        self.rulesTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(path_type))
+        self.rulesTable.setItem(row_count, 2, QtWidgets.QTableWidgetItem(service_name))
+        self.rulesTable.setItem(row_count, 3, QtWidgets.QTableWidgetItem(num_ports))
         
         self.rules.append({
-            "host": host,
             "path": path,
             "pathType": path_type,
             "serviceName": service_name,
@@ -950,21 +962,31 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
         
         self.clear_rule_fields()
 
+    def update_remove_button_state(self):
+        if self.rulesTable.selectedItems():
+            self.btn_remove_rule.setEnabled(True)
+        else:
+            self.btn_remove_rule.setEnabled(False)
+            
     def remove_selected_rule(self):
         selected_items = self.rulesTable.selectedItems()
         if not selected_items:
             return
 
         removed_row = selected_items[0].row()
-        host = self.rulesTable.item(removed_row, 0).text()
-        path = self.rulesTable.item(removed_row, 1).text()
-        self.rules = [r for r in self.rules if r["host"] != host or r["path"] != path]
-        self.rulesTable.removeRow(removed_row)  
+        path = self.rulesTable.item(removed_row, 0).text()
+        self.rules = [r for r in self.rules if r["path"] != path]
+        self.rulesTable.removeRow(removed_row)
+        self.update_remove_button_state()
 
     def save_configuration(self):
         name = self.line_name.text().lower()
         namespace = self.namespaces.currentText()
+        host = self.line_host.text()
 
+        if not host:
+            host = ""
+            
         if not name or not self.rules:
             self.show_error("Please provide a name and at least one rule.")
             return
@@ -980,7 +1002,14 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
                     }
                 },
                 "spec": {
-                    "rules": []
+                    "rules": [
+                        {
+                            "host": host,
+                            "http": {
+                                "paths": []
+                            }
+                        }
+                    ]
                 }
             }
 
@@ -994,23 +1023,16 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
                 self.show_error(f"No ports found for service {rule['serviceName']}")
                 return
 
-            params["spec"]["rules"].append({
-                "host": rule["host"],
-                "http": {
-                    "paths": [
-                        {
-                            "path": rule["path"],
-                            "pathType": rule["pathType"],
-                            "backend": {
-                                "service": {
-                                    "name": rule["serviceName"],
-                                    "port": {
-                                        "number": port_number
-                                    }
-                                }
-                            }
+            params["spec"]["rules"][0]["http"]["paths"].append({
+                "path": rule["path"],
+                "pathType": rule["pathType"],
+                "backend": {
+                    "service": {
+                        "name": rule["serviceName"],
+                        "port": {
+                            "number": port_number
                         }
-                    ]
+                    }
                 }
             })
                 
@@ -1021,7 +1043,6 @@ class IngressPage(QtWidgets.QMainWindow, Ui_IngressConfig):
     def clear_rule_fields(self):
         self.line_host.clear()
         self.line_path.clear()
-
 
     def show_error(self, message):
         msg_box = QtWidgets.QMessageBox()
@@ -1038,12 +1059,14 @@ class ServicePortInfo(QtWidgets.QMainWindow, Ui_ServicePortInfo):
 
     def fill_service_port_info(self, selected_service):
         service_port_text = ""
+        service_port_text += "Deployment Label: {}\n".format(selected_service.get('deployment_label', ''))
+        service_port_text += "Type: {}\n".format(selected_service.get('type', ''))
+        service_port_text += "ClusterIP: {}\n".format(selected_service.get('cluster_ip', ''))
+        service_port_text += "\n"
         ports = selected_service.get('ports', [])
         for port in ports:
             service_port_text += "Name: {}\n".format(port.get('name', ''))
             service_port_text += "Port: {}\n".format(port.get('port', ''))
-            service_port_text += "Deployment Label: {}\n".format(selected_service.get('deployment_label', ''))
-            service_port_text += "Type: {}\n".format(selected_service.get('type', ''))
             service_port_text += "Target Port: {}\n".format(port.get('target_port', ''))
             service_port_text += "Protocol: {}\n".format(port.get('protocol', ''))
             service_port_text += "Node Port: {}\n".format(port.get('node_port', ''))
@@ -1089,9 +1112,18 @@ class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
         self.btn_cancel_service.clicked.connect(self.close)
         self.btn_add_port.clicked.connect(self.add_port_to_table)
         self.btn_remove_port.clicked.connect(self.remove_selected_port)
+        self.btn_remove_port.setEnabled(False)
+        
+        self.portsTable.selectionModel().selectionChanged.connect(self.update_remove_button_state)
 
         for col in range(4):
             self.portsTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+                        
+    def update_remove_button_state(self):
+        if self.portsTable.selectedItems():
+            self.btn_remove_port.setEnabled(True)
+        else:
+            self.btn_remove_port.setEnabled(False)
             
     def add_port_to_table(self):
         port_name = self.line_port_name.text()
@@ -1143,6 +1175,7 @@ class ServicePage(QtWidgets.QMainWindow, Ui_ServiceConfig):
             port_name = self.portsTable.item(removed_row, 0).text()
             self.ports = [p for p in self.ports if p["name"] != port_name]
             self.portsTable.removeRow(removed_row)
+        self.update_remove_button_state()
 
     def save_configuration(self):
         name = self.line_name.text().lower()
@@ -1218,12 +1251,20 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
         self.btn_cancel_deploy.clicked.connect(self.close)
         self.btn_add_cont.clicked.connect(self.add_container_to_table)
         self.btn_remove_cont.clicked.connect(self.remove_selected_container)
+        self.btn_remove_cont.setEnabled(False)
+        
+        self.containersTable.selectionModel().selectionChanged.connect(self.update_remove_button_state)
 
         self.selected_pod = []
         for col in range(2):
-            self.containersTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
-                    
-        
+            self.containersTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)                
+    
+    def update_remove_button_state(self):
+        if self.containersTable.selectedItems():
+            self.btn_remove_cont.setEnabled(True)
+        else:
+            self.btn_remove_cont.setEnabled(False)
+                
     def add_container_to_table(self):
         image = self.container_images.currentText()
         container_port = self.line_container_port.text()
@@ -1253,6 +1294,8 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
 
         for item in selected_items:
             self.containersTable.removeRow(item.row())
+            
+        self.update_remove_button_state()
             
     def save_configuration(self):
         name = self.line_name.text().lower()
@@ -1323,13 +1366,13 @@ class DeploymentPage(QtWidgets.QMainWindow, Ui_DeploymentConfig):
                 "replicas": int(replicas),
                 "selector": {
                     "matchLabels": {
-                        "app": name
+                        "app": label
                     }
                 },
                 "template": {
                     "metadata": {
                         "labels": {
-                            "app": name
+                            "app": label
                         }
                     },
                     "spec": {
@@ -1391,42 +1434,14 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
         self.btn_cancel.clicked.connect(self.close)
         self.btn_add_cont.clicked.connect(self.add_container_to_table)
         self.btn_remove_cont.clicked.connect(self.remove_selected_container)
+        self.btn_remove_cont.setEnabled(False)
+        
+        self.containersTable.selectionModel().selectionChanged.connect(self.update_remove_button_state)
         
         for col in range(2):
                     self.containersTable.horizontalHeader().setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
     
-    def populate_pod_data(self, selected_pod):
-        self.selected_pod = selected_pod
-        namespace_index = self.namespaces.findText(selected_pod["namespace"])
-        if namespace_index != -1:
-            self.namespace = selected_pod["namespace"]
-            self.namespaces.setCurrentIndex(namespace_index)
-            self.namespaces.setEnabled(False)
-
-        self.line_name.setText(selected_pod["name"])
-        self.line_name.setEnabled(False)
-        self.name = selected_pod["name"]
-        
-        label = selected_pod["label"]
-        self.line_label.setText(label)
-        self.line_label.setEnabled(False)
-
-        self.containersTable.setRowCount(0) 
-        for container in selected_pod["containers"]:
-            row_count = self.containersTable.rowCount()
-            self.containersTable.insertRow(row_count)
-
-            image_name = container["name"]
-            container_port = str(container["ports"][0]["container_port"])
-
-            self.containersTable.setItem(row_count, 0, QtWidgets.QTableWidgetItem(image_name))
-            self.containersTable.setItem(row_count, 1, QtWidgets.QTableWidgetItem(container_port))
-
-            for col in range(2):
-                item = self.containersTable.item(row_count, col)
-                if item:
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)   
-
+    
     def refresh_container_table(self):
         try:
             self.containersTable.setRowCount(0)
@@ -1471,6 +1486,12 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
                     if item:
                         item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
 
+    def update_remove_button_state(self):
+        if self.containersTable.selectedItems():
+            self.btn_remove_cont.setEnabled(True)
+        else:
+            self.btn_remove_cont.setEnabled(False)
+            
     def remove_selected_container(self):
         selected_items = self.containersTable.selectedItems()
         if not selected_items:
@@ -1478,6 +1499,8 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
 
         for item in selected_items:
             self.containersTable.removeRow(item.row())
+            
+        self.update_remove_button_state()
     
     def construct_patch_operation(self, containers):
         patch_operation = [
@@ -1532,27 +1555,23 @@ class PodPage(QtWidgets.QMainWindow, Ui_PodConfig):
             msg_box.exec_()
             return
 
-        if self.selected_pod != None:
-            patch_operation = self.construct_patch_operation(containers)
-            print(patch_operation)
-            api.update_pod(self.api_instance, self.name, self.namespace, patch_operation)
-        else:
-            params = {
-                "apiVersion": "v1",
-                "kind": "Pod",
-                "metadata": {
-                    "name": name,
-                    "namespace": namespace,
-                    "labels": {
-                        "app": label
-                    }
-                },
-                "spec": {
-                    "containers": containers
+
+        params = {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": {
+                    "app": label
                 }
+            },
+            "spec": {
+                "containers": containers
             }
-                    
-            api.create_pod(self.api_instance, namespace,params)
+        }
+                
+        api.create_pod(self.api_instance, namespace,params)
 
         self.configSaved.emit()
         self.close() 

@@ -3,15 +3,12 @@ matplotlib
 seaborn
 paramiko
 urllib3
-requests
 importlib
 pandas
 SpeechRecognition
 pyaudio
 pyttsx3
-librosa
-scipy
 numpy
 python_speech_features
-keras
-tensorflow
+scikit-learn
+joblib

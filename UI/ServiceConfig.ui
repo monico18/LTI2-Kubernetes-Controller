@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>882</width>
-    <height>697</height>
+    <height>718</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -1790,7 +1790,7 @@
     </palette>
    </property>
    <property name="text">
-    <string>Port Name?</string>
+    <string>Port Name</string>
    </property>
   </widget>
   <widget class="QLineEdit" name="line_port_name">

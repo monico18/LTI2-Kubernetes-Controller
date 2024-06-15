@@ -25,12 +25,16 @@ def list_nodes(api_instance):
                 {
                     "name": node["metadata"]["name"],
                     "pod_CIDR": node["spec"]["pod_cidr"],
-                    "node_info": node["status"]["node_info"]["os_image"]
+                    "node_info": node["status"]["node_info"]["os_image"],
+                    "node_ip": next(
+                (addr["address"] for addr in node["status"]["addresses"] if addr["type"] == "InternalIP"),
+                None
+                 ),
                 }
                 for node in api_response.get("items", [])
             ]
         }
-
+        
         return json.dumps(filtered_response, indent=4)
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_node: %s\n" % e)
@@ -74,14 +78,6 @@ def create_namespace(api_instance,json_content):
     try:
         api_instance.create_core_v1_namespace(json_content).to_dict()
         
-    except ApiException as e :
-        print("Exception when calling CoreV1Api->list_core_v1_namespace: %s\n" % e)
-
-def update_namespace(api_instance,name,json_content):
-    try:
-        api_response = api_instance.patch_core_v1_namespace(name,json_content).to_dict()
-        print(json.dumps(api_response, indent=4))
-
     except ApiException as e :
         print("Exception when calling CoreV1Api->list_core_v1_namespace: %s\n" % e)
 
@@ -196,13 +192,6 @@ def create_pod(api_instance,namespace, json_content):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_pod_for_all_namespaces: %s\n" % e)
         
-def update_pod(api_instance,name ,namespace, json_content):
-    try:
-        api_instance.patch_core_v1_namespaced_pod(name,namespace,body=json_content).to_dict()
-
-    except ApiException as e:
-        print("Exception when calling CoreV1Api->list_core_v1_pod_for_all_namespaces: %s\n" % e)
-        
 def delete_pod(api_instance,name ,namespace):
     try:
         api_instance.delete_core_v1_namespaced_pod(name,namespace).to_dict()
@@ -281,22 +270,6 @@ def create_deployment(ip_add, api_key, api_port, namespace, json_contents):
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
         
-def update_deployment(ip_add, api_key, api_port, name, namespace, json_contents):
-    try:
-        configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:{api_port}"
-        configuration.verify_ssl = False
-        configuration.api_key['authorization'] = api_key
-        configuration.api_key_prefix['authorization'] = 'Bearer'
-
-        api_instance = swagger_client.AppsV1Api(swagger_client.ApiClient(configuration))
-        
-        api_response = api_instance.patch_apps_v1_namespaced_deployment_with_http_info(name, namespace, json_contents).to_dict()
-        print(json.dumps(api_response, indent=4))
-
-    except ApiException as e:
-        print("Exception when calling CoreV1Api->list_core_v1_replication_controller_for_all_namespaces: %s\n" % e)
-        
 def delete_deployment(ip_add, api_key, api_port, name, namespace):
     try:
         configuration = swagger_client.Configuration()
@@ -346,7 +319,8 @@ def list_selected_service(api_instance, name, namespace):
                     "label": api_response["metadata"]["labels"]["app"],
                     "ports": api_response["spec"]["ports"],
                     "deployment_label": api_response["spec"]["selector"]["app"],
-                    "type" : api_response["spec"]["type"]
+                    "type" : api_response["spec"]["type"],
+                    "cluster_ip": api_response["spec"]["cluster_ip"]
                 }
 
         return json.dumps(filtered_response, indent=4)        
@@ -357,14 +331,6 @@ def create_service(api_instance, namespace, json_content):
     try:
         api_instance.create_core_v1_namespaced_service(namespace, json_content).to_dict()
         
-    except ApiException as e:
-        print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
-
-def patch_service(api_instance, name, namespace, json_content):
-    try:
-        api_response = api_instance.patch_core_v1_namespaced_service(name, namespace, json_content).to_dict()
-        print(json.dumps(api_response, indent=4))
-
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
         
@@ -437,22 +403,6 @@ def create_ingress(ip_add, api_key, api_port,  namespace, json_contents):
         api_instance = swagger_client.NetworkingV1Api(swagger_client.ApiClient(configuration))
         
         api_response = api_instance.create_networking_v1_namespaced_ingress(namespace, json_contents).to_dict()
-
-    except ApiException as e:
-        print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)
-        
-def patch_ingress(ip_add, api_key, api_port, name, namespace, json_contents):
-    try:
-        configuration = swagger_client.Configuration()
-        configuration.host = f"https://{ip_add}:{api_port}"
-        configuration.verify_ssl = False
-        configuration.api_key['authorization'] = api_key
-        configuration.api_key_prefix['authorization'] = 'Bearer'
-
-        api_instance = swagger_client.NetworkingV1Api(swagger_client.ApiClient(configuration))
-        
-        api_response = api_instance.patch_networking_v1_namespaced_ingress_with_http_info(name, namespace, json_contents).to_dict()
-        print(json.dumps(api_response, indent=4))
 
     except ApiException as e:
         print("Exception when calling CoreV1Api->list_core_v1_service_account_for_all_namespaces: %s\n" % e)

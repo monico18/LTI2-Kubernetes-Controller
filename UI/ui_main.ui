@@ -2378,6 +2378,11 @@
                   <string>Node OS</string>
                  </property>
                 </column>
+                <column>
+                 <property name="text">
+                  <string>Node IP</string>
+                 </property>
+                </column>
                </widget>
               </item>
              </layout>

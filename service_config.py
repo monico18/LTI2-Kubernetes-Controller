@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_ServiceConfig(object):
     def setupUi(self, ServiceConfig):
         ServiceConfig.setObjectName("ServiceConfig")
-        ServiceConfig.resize(882, 697)
+        ServiceConfig.resize(882, 718)
         ServiceConfig.setStyleSheet("background-color: rgb(45, 45, 45);")
         self.btn_apply_service = QtWidgets.QPushButton(ServiceConfig)
         self.btn_apply_service.setGeometry(QtCore.QRect(560, 40, 131, 31))
@@ -1411,7 +1411,7 @@ class Ui_ServiceConfig(object):
         item.setText(_translate("ServiceConfig", "Port"))
         item = self.portsTable.horizontalHeaderItem(3)
         item.setText(_translate("ServiceConfig", "Target Port"))
-        self.label_2.setText(_translate("ServiceConfig", "Port Name?"))
+        self.label_2.setText(_translate("ServiceConfig", "Port Name"))
         self.label_4.setText(_translate("ServiceConfig", "Port"))
         self.label_5.setText(_translate("ServiceConfig", "Target Port"))
         self.label_7.setText(_translate("ServiceConfig", "-->"))

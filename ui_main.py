@@ -801,7 +801,7 @@ class Ui_MainWindow(object):
         palette.setBrush(QtGui.QPalette.Disabled, QtGui.QPalette.Window, brush)
         self.nodesTable.setPalette(palette)
         self.nodesTable.setObjectName("nodesTable")
-        self.nodesTable.setColumnCount(3)
+        self.nodesTable.setColumnCount(4)
         self.nodesTable.setRowCount(0)
         item = QtWidgets.QTableWidgetItem()
         self.nodesTable.setHorizontalHeaderItem(0, item)
@@ -809,6 +809,8 @@ class Ui_MainWindow(object):
         self.nodesTable.setHorizontalHeaderItem(1, item)
         item = QtWidgets.QTableWidgetItem()
         self.nodesTable.setHorizontalHeaderItem(2, item)
+        item = QtWidgets.QTableWidgetItem()
+        self.nodesTable.setHorizontalHeaderItem(3, item)
         self.nodesTable.verticalHeader().setVisible(False)
         self.verticalLayout_6.addWidget(self.nodesTable)
         self.stackedWidget.addWidget(self.page_2)
@@ -2391,7 +2393,7 @@ class Ui_MainWindow(object):
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)
-        self.stackedWidget.setCurrentIndex(0)
+        self.stackedWidget.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -2414,6 +2416,8 @@ class Ui_MainWindow(object):
         item.setText(_translate("MainWindow", "Pod-CIDR"))
         item = self.nodesTable.horizontalHeaderItem(2)
         item.setText(_translate("MainWindow", "Node OS"))
+        item = self.nodesTable.horizontalHeaderItem(3)
+        item.setText(_translate("MainWindow", "Node IP"))
         self.groupBox_3.setTitle(_translate("MainWindow", "Namespaces"))
         self.btn_add_namespace.setText(_translate("MainWindow", "Add Namespace"))
         self.btn_delete_namespace.setText(_translate("MainWindow", "Delete Selected \n"

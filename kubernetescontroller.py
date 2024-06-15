@@ -219,8 +219,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.stackedWidget.setCurrentWidget(self.page_7)
         elif "create ingress" in text or "create the ingress" in text:
             self.btn_add_ingress.click()
-        elif "wizard" in text:
-            self.stackedWidget.setCurrentWidget(self.page_8)
 
     def handle_recognition_error(self, error_message):
         print(error_message)
@@ -1658,7 +1656,7 @@ class LoginPage(QtWidgets.QMainWindow, Ui_LoginPage):
         print(prediction_proba)
         print(probability_of_authorized)
 
-        threshold = 0.75
+        threshold = 0.80
 
         self.message_box.hide()
         if probability_of_authorized >= threshold:
